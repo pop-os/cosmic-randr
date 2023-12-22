@@ -1,0 +1,11 @@
+[package]
+name = "cosmic-randr-shell"
+version = "0.1.0"
+description = "Wrapper for the cosmic-randr CLI"
+license = "MPL-2.0"
+edition = "2021"
+
+[dependencies]
+kdl = "4.6.0"
+slotmap = "1.0.7"
+thiserror = "1.0.51"

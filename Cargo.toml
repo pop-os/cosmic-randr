@@ -1,0 +1,7 @@
+[workspace]
+members = ["cli", "lib", "shell"]
+resolver = "2"
+
+[profile.release]
+opt-level = "s"
+# rustflags = ["-C", "inline-threshold=1"]

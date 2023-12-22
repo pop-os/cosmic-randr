@@ -1,0 +1,19 @@
+Source: cosmic-randr
+Section: utils
+Priority: optional
+Maintainer: Michael Murphy <michael@mmurphy.dev>
+Build-Depends:
+    cargo,
+    debhelper-compat (=13),
+    just,
+    libwayland-dev,
+    pkg-config,
+    rustc,
+Standards-Version: 4.6.2
+Homepage: https://github.com/pop-os/cosmic-randr
+
+Package: cosmic-randr
+Architecture: amd64 arm64
+Depends: ${misc:Depends}, ${shlibs:Depends}
+Description: Display and configure wayland display outputs
+ Display and configure wayland display outputs

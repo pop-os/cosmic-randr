@@ -1,0 +1,15 @@
+[package]
+name = "cosmic-randr"
+version = "0.1.0"
+description = "high level library for wayland output configuration"
+license = "MPL-2.0"
+edition = "2021"
+
+[dependencies]
+futures-lite = "2.1.0"
+tachyonix = "0.2.1"
+thiserror = "1.0.51"
+tokio = { version = "1.35.1", features = ["net"] }
+tracing = "0.1.40"
+wayland-client = "0.31.1"
+wayland-protocols-wlr = { version = "0.2.0", features = [ "client", "wayland-client" ] }

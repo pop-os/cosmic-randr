@@ -1,0 +1,19 @@
+[package]
+name = "cosmic-randr-cli"
+version = "0.1.0"
+description = "cosmic-randr command line interface"
+license = "MPL-2.0"
+edition = "2021"
+
+[[bin]]
+name = "cosmic-randr"
+path = "src/main.rs"
+
+[dependencies]
+clap = { version = "4.4.11", features = ["derive"] }
+fomat-macros = "0.3.2"
+futures-lite = "2.1.0"
+cosmic-randr = { path = "../lib" }
+tachyonix = "0.2.1"
+tokio = { version = "1.35.0", features = [ "macros", "rt" ]}
+wayland-client = "0.31.1"
