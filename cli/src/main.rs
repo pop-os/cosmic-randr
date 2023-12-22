@@ -44,6 +44,12 @@ struct Mode {
 
 #[derive(clap::Subcommand, Debug)]
 enum Commands {
+    /// Disable a display
+    Disable { output: String },
+
+    /// Enable a display
+    Enable { output: String },
+
     /// List available output heads and modes.
     List {
         /// Display in KDL format.
@@ -66,6 +72,22 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let _res = event_queue.roundtrip(&mut context);
 
     match cli.command {
+        Commands::Enable { output } => loop {
+            tokio::select! {
+                _res = context.dispatch(&mut event_queue) => {
+                    return enable(&mut context, &output);
+                }
+            }
+        },
+
+        Commands::Disable { output } => loop {
+            tokio::select! {
+                _res = context.dispatch(&mut event_queue) => {
+                    return disable(&mut context, &output);
+                }
+            }
+        },
+
         Commands::List { kdl } => loop {
             tokio::select! {
                 _res = context.dispatch(&mut event_queue) => {
@@ -115,6 +137,44 @@ pub fn config_message(
 
         _ => Ok(false),
     }
+}
+
+fn disable(context: &mut Context, output: &str) -> Result<(), Box<dyn std::error::Error>> {
+    let Some(head) = context
+        .output_heads
+        .iter()
+        .filter(|(_id, head)| head.wlr_head.is_alive())
+        .find(|(_id, head)| head.name == output)
+        .map(|(_id, head)| (head.clone()))
+    else {
+        return Err("could not find display".into());
+    };
+
+    let config = context.create_output_config();
+
+    config.disable_head(&head.wlr_head);
+    config.apply();
+
+    Ok(())
+}
+
+fn enable(context: &mut Context, output: &str) -> Result<(), Box<dyn std::error::Error>> {
+    let Some(head) = context
+        .output_heads
+        .iter()
+        .filter(|(_id, head)| head.wlr_head.is_alive())
+        .find(|(_id, head)| head.name == output)
+        .map(|(_id, head)| (head.clone()))
+    else {
+        return Err("could not find display".into());
+    };
+
+    let config = context.create_output_config();
+
+    config.enable_head(&head.wlr_head, &context.handle, context.data);
+    config.apply();
+
+    Ok(())
 }
 
 fn list(context: &Context) {
