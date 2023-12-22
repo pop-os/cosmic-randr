@@ -3,6 +3,7 @@
 
 use clap::Parser;
 use cosmic_randr::{AdaptiveSyncState, Context};
+use nu_ansi_term::{Color, Style};
 use std::{fmt::Write as FmtWrite, io::Write};
 use wayland_client::Proxy;
 
@@ -185,27 +186,30 @@ fn list(context: &Context) {
         #[allow(clippy::ignored_unit_patterns)]
         let _res = fomat_macros::witeln!(
             &mut output,
-            (head.name) "\n"
-            "  Enabled: " (head.enabled) "\n"
-            "  Make: "
-            if head.make.is_empty() {
-                "Unknown"
+            (Style::new().bold().paint(&head.name)) " "
+            if head.enabled {
+                (Color::Green.bold().paint("(enabled)"))
             } else {
-                (head.make)
+                (Color::Red.bold().paint("(disabled)"))
             }
-            "\n"
-            "  Model: " (head.model) "\n"
-            "  PhysicalSize: " (head.physical_width) "x" (head.physical_height) " mm\n"
-            "  Position: " (head.position_x) "," (head.position_y) "\n"
+            if !head.make.is_empty() {
+                (Color::Yellow.bold().paint("\n  Make: ")) (head.make)
+            }
+            (Color::Yellow.bold().paint("\n  Model: "))
+            (head.model)
+            (Color::Yellow.bold().paint("\n  Physical Size: "))
+            (head.physical_width) " x " (head.physical_height) " mm"
+            (Color::Yellow.bold().paint("\n  Position: "))
+            (head.position_x) "," (head.position_y)
             if let Some(sync) = head.adaptive_sync {
-                "    Adaptive Sync: "
+                (Color::Yellow.bold().paint("\n  Adaptive Sync: "))
                 if let AdaptiveSyncState::Enabled = sync {
-                    "true\n"
+                    (Color::Green.paint("true\n"))
                 } else {
-                    "false\n"
+                    (Color::Red.paint("false\n"))
                 }
             }
-            "  Modes:"
+            (Color::Yellow.bold().paint("\n  Modes:"))
         );
 
         for mode_id in &head.modes {
@@ -218,15 +222,22 @@ fn list(context: &Context) {
 
             let _res = writeln!(
                 &mut output,
-                "    {:>9} @ {:>3}.{:02} Hz{}{}",
-                &resolution,
-                mode.refresh / 1000,
-                mode.refresh % 1000,
-                if mode.preferred { " (preferred)" } else { "" },
-                if head.current_mode.as_ref() == Some(mode_id) {
-                    " (current)"
+                "    {:>9} @ {}{}{}",
+                Color::Magenta.paint(format!("{resolution:>9}")),
+                Color::Cyan.paint(format!(
+                    "{:>3}.{:02} Hz",
+                    mode.refresh / 1000,
+                    mode.refresh % 1000
+                )),
+                if mode.preferred {
+                    Color::Green.bold().paint(" (preferred)")
                 } else {
-                    ""
+                    Color::default().paint("")
+                },
+                if head.current_mode.as_ref() == Some(mode_id) {
+                    Color::Purple.bold().paint(" (current)")
+                } else {
+                    Color::default().paint("")
                 }
             );
         }
