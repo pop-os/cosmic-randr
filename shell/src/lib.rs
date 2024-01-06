@@ -7,12 +7,13 @@ use std::collections::HashMap;
 
 #[derive(Clone, Debug)]
 pub struct Mode {
-    size: (u32, u32),
-    refresh_rate: u32,
-    preferred: bool,
+    pub size: (u32, u32),
+    pub refresh_rate: u32,
+    pub preferred: bool,
 }
 
 impl Mode {
+    #[must_use]
     pub const fn new() -> Self {
         Self {
             size: (0, 0),
@@ -22,26 +23,29 @@ impl Mode {
     }
 }
 
-#[derive(Clone, Debug)]
-pub struct Outputs {
-    outputs: HashMap<String, Output>,
-    modes: SlotMap<DefaultKey, Mode>,
+#[derive(Clone, Debug, Default)]
+pub struct List {
+    pub outputs: SlotMap<DefaultKey, Output>,
+    pub modes: SlotMap<DefaultKey, Mode>,
 }
 
 #[derive(Clone, Debug)]
 pub struct Output {
-    enabled: bool,
-    make: Option<String>,
-    model: String,
-    physical: (u32, u32),
-    position: (u32, u32),
-    modes: Vec<DefaultKey>,
-    current: Option<DefaultKey>,
+    pub name: String,
+    pub enabled: bool,
+    pub make: Option<String>,
+    pub model: String,
+    pub physical: (u32, u32),
+    pub position: (u32, u32),
+    pub modes: Vec<DefaultKey>,
+    pub current: Option<DefaultKey>,
 }
 
 impl Output {
+    #[must_use]
     pub const fn new() -> Self {
         Self {
+            name: String::new(),
             enabled: false,
             make: None,
             model: String::new(),
@@ -64,14 +68,15 @@ pub enum Error {
 }
 
 #[allow(clippy::too_many_lines)]
-pub fn list() -> Result<Outputs, Error> {
+pub async fn list() -> Result<List, Error> {
     // Get a list of outputs from `cosmic-randr` in KDL format.
-    let stdout = std::process::Command::new("cosmic-randr")
+    let stdout = tokio::process::Command::new("cosmic-randr")
         .arg("list")
         .arg("--kdl")
         .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::null())
         .output()
+        .await
         .map_err(Error::Spawn)?
         .stdout;
 
@@ -81,8 +86,8 @@ pub fn list() -> Result<Outputs, Error> {
         .parse::<KdlDocument>()
         .map_err(Error::Kdl)?;
 
-    let mut outputs = Outputs {
-        outputs: HashMap::new(),
+    let mut outputs = List {
+        outputs: SlotMap::new(),
         modes: SlotMap::new(),
     };
 
@@ -129,7 +134,7 @@ pub fn list() -> Result<Outputs, Error> {
                     for entry in node.entries() {
                         let value = entry.value().as_string();
 
-                        match entry.name().map(|name| name.value()) {
+                        match entry.name().map(kdl::KdlIdentifier::value) {
                             Some("make") => {
                                 output.make = value.map(String::from);
                             }
@@ -187,7 +192,7 @@ pub fn list() -> Result<Outputs, Error> {
                             };
 
                             for entry in node.entries().iter().skip(3) {
-                                match entry.name().map(|name| name.value()) {
+                                match entry.name().map(kdl::KdlIdentifier::value) {
                                     Some("current") => current = true,
                                     Some("preferred") => mode.preferred = true,
                                     _ => (),
@@ -209,7 +214,9 @@ pub fn list() -> Result<Outputs, Error> {
             }
         }
 
-        outputs.outputs.insert(name.to_owned(), output);
+        output.name = name.to_owned();
+
+        outputs.outputs.insert(output);
     }
 
     Ok(outputs)

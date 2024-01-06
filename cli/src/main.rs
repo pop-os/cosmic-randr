@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MPL-2.0
 
 use clap::Parser;
-use cosmic_randr::{AdaptiveSyncState, Context};
+use cosmic_randr::{AdaptiveSyncState, Context, output_head::OutputHead};
 use nu_ansi_term::{Color, Style};
 use std::{fmt::Write as FmtWrite, io::Write};
 use wayland_client::Proxy;
@@ -140,19 +140,23 @@ pub fn config_message(
     }
 }
 
-fn disable(context: &mut Context, output: &str) -> Result<(), Box<dyn std::error::Error>> {
-    let Some(head) = context
+fn get_output_head(
+    context: &mut Context,
+    output: &str,
+) -> Result<OutputHead, Box<dyn std::error::Error>> {
+    context
         .output_heads
         .iter()
         .filter(|(_id, head)| head.wlr_head.is_alive())
         .find(|(_id, head)| head.name == output)
         .map(|(_id, head)| (head.clone()))
-    else {
-        return Err("could not find display".into());
-    };
+        .ok_or_else(|| "could not find display".into())
+}
+
+fn disable(context: &mut Context, output: &str) -> Result<(), Box<dyn std::error::Error>> {
+    let head = get_output_head(context, output)?;
 
     let config = context.create_output_config();
-
     config.disable_head(&head.wlr_head);
     config.apply();
 
@@ -160,18 +164,9 @@ fn disable(context: &mut Context, output: &str) -> Result<(), Box<dyn std::error
 }
 
 fn enable(context: &mut Context, output: &str) -> Result<(), Box<dyn std::error::Error>> {
-    let Some(head) = context
-        .output_heads
-        .iter()
-        .filter(|(_id, head)| head.wlr_head.is_alive())
-        .find(|(_id, head)| head.name == output)
-        .map(|(_id, head)| (head.clone()))
-    else {
-        return Err("could not find display".into());
-    };
+    let head = get_output_head(context, output)?;
 
     let config = context.create_output_config();
-
     config.enable_head(&head.wlr_head, &context.handle, context.data);
     config.apply();
 
@@ -308,15 +303,7 @@ fn list_kdl(context: &Context) {
 }
 
 fn set_mode(context: &mut Context, args: &Mode) -> Result<(), Box<dyn std::error::Error>> {
-    let Some(head) = context
-        .output_heads
-        .iter()
-        .filter(|(_id, head)| head.wlr_head.is_alive())
-        .find(|(_id, head)| head.name == args.output)
-        .map(|(_id, head)| (head.clone()))
-    else {
-        return Err("could not find display".into());
-    };
+    let head = get_output_head(context, &args.output)?;
 
     let config = context.create_output_config();
     let head_config = config.enable_head(&head.wlr_head, &context.handle, context.data);
