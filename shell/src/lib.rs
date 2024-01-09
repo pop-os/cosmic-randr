@@ -2,8 +2,14 @@
 // SPDX-License-Identifier: MPL-2.0
 
 use kdl::{KdlDocument, KdlError};
-use slotmap::{DefaultKey, SlotMap};
-use std::collections::HashMap;
+use slotmap::SlotMap;
+
+slotmap::new_key_type! {
+    /// A unique slotmap key to an output.
+    pub struct OutputKey;
+    /// A unique slotmap key to a mode.
+    pub struct ModeKey;
+}
 
 #[derive(Clone, Debug)]
 pub struct Mode {
@@ -25,8 +31,8 @@ impl Mode {
 
 #[derive(Clone, Debug, Default)]
 pub struct List {
-    pub outputs: SlotMap<DefaultKey, Output>,
-    pub modes: SlotMap<DefaultKey, Mode>,
+    pub outputs: SlotMap<OutputKey, Output>,
+    pub modes: SlotMap<ModeKey, Mode>,
 }
 
 #[derive(Clone, Debug)]
@@ -37,8 +43,8 @@ pub struct Output {
     pub model: String,
     pub physical: (u32, u32),
     pub position: (u32, u32),
-    pub modes: Vec<DefaultKey>,
-    pub current: Option<DefaultKey>,
+    pub modes: Vec<ModeKey>,
+    pub current: Option<ModeKey>,
 }
 
 impl Output {
@@ -87,8 +93,8 @@ pub async fn list() -> Result<List, Error> {
         .map_err(Error::Kdl)?;
 
     let mut outputs = List {
-        outputs: SlotMap::new(),
-        modes: SlotMap::new(),
+        outputs: SlotMap::with_key(),
+        modes: SlotMap::with_key(),
     };
 
     // Each node in the root of the document is an output.
