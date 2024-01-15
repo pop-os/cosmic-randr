@@ -1,10 +1,12 @@
 // Copyright 2023 System76 <info@system76.com>
 // SPDX-License-Identifier: MPL-2.0
 
-use clap::Parser;
-use cosmic_randr::{AdaptiveSyncState, Context, output_head::OutputHead};
+use clap::{Parser, ValueEnum};
+use cosmic_randr::{output_head::OutputHead, AdaptiveSyncState, Context};
 use nu_ansi_term::{Color, Style};
-use std::{fmt::Write as FmtWrite, io::Write};
+use std::fmt::{Display, Write as FmtWrite};
+use std::io::Write;
+use wayland_client::protocol::wl_output::Transform as WlTransform;
 use wayland_client::Proxy;
 
 /// Display and configure wayland outputs
@@ -39,8 +41,8 @@ struct Mode {
     #[arg(long)]
     test: bool,
     /// Specifies a transformation matrix to apply to the output.
-    #[arg(long)]
-    transform: Option<String>,
+    #[arg(long, value_enum)]
+    transform: Option<Transform>,
 }
 
 #[derive(clap::Subcommand, Debug)]
@@ -62,6 +64,67 @@ enum Commands {
     Mode(Mode),
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq, PartialOrd, Ord, ValueEnum)]
+pub enum Transform {
+    Normal,
+    Rotate90,
+    Rotate180,
+    Rotate270,
+    Flipped,
+    Flipped90,
+    Flipped180,
+    Flipped270,
+}
+
+impl Display for Transform {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(match self {
+            Transform::Normal => "normal",
+            Transform::Rotate90 => "rotate-90",
+            Transform::Rotate180 => "rotate-180",
+            Transform::Rotate270 => "rotate-270",
+            Transform::Flipped => "flipped",
+            Transform::Flipped90 => "flipped-90",
+            Transform::Flipped180 => "flipped-180",
+            Transform::Flipped270 => "flipped-270",
+        })
+    }
+}
+
+impl TryFrom<WlTransform> for Transform {
+    type Error = &'static str;
+
+    fn try_from(transform: WlTransform) -> Result<Self, Self::Error> {
+        Ok(match transform {
+            WlTransform::Normal => Transform::Normal,
+            WlTransform::_90 => Transform::Rotate90,
+            WlTransform::_180 => Transform::Rotate180,
+            WlTransform::_270 => Transform::Rotate270,
+            WlTransform::Flipped => Transform::Flipped,
+            WlTransform::Flipped90 => Transform::Flipped90,
+            WlTransform::Flipped180 => Transform::Flipped180,
+            WlTransform::Flipped270 => Transform::Flipped270,
+            _ => return Err("unknown wl_transform variant"),
+        })
+    }
+}
+
+impl Transform {
+    #[must_use]
+    pub fn wl_transform(self) -> WlTransform {
+        match self {
+            Transform::Normal => WlTransform::Normal,
+            Transform::Rotate90 => WlTransform::_90,
+            Transform::Rotate180 => WlTransform::_180,
+            Transform::Rotate270 => WlTransform::_270,
+            Transform::Flipped => WlTransform::Flipped,
+            Transform::Flipped90 => WlTransform::Flipped90,
+            Transform::Flipped180 => WlTransform::Flipped180,
+            Transform::Flipped270 => WlTransform::Flipped270,
+        }
+    }
+}
+
 #[tokio::main(flavor = "current_thread")]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let cli = Cli::parse();
@@ -78,6 +141,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 _res = context.dispatch(&mut event_queue) => {
                     return enable(&mut context, &output);
                 }
+
+                message = message_rx.recv() => {
+                    if config_message(message)? {
+                        return Ok(());
+                    }
+                }
             }
         },
 
@@ -86,21 +155,26 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 _res = context.dispatch(&mut event_queue) => {
                     return disable(&mut context, &output);
                 }
-            }
-        },
 
-        Commands::List { kdl } => loop {
-            tokio::select! {
-                _res = context.dispatch(&mut event_queue) => {
-                    if kdl {
-                        list_kdl(&context);
-                    } else {
-                        list(&context);
+                message = message_rx.recv() => {
+                    if config_message(message)? {
+                        return Ok(());
                     }
-                    return Ok(());
                 }
             }
         },
+
+        Commands::List { kdl } => {
+            let _res = context.dispatch(&mut event_queue).await;
+
+            if kdl {
+                list_kdl(&context);
+            } else {
+                list(&context);
+            }
+
+            return Ok(());
+        }
 
         Commands::Mode(mode) => loop {
             tokio::select! {
@@ -196,6 +270,11 @@ fn list(context: &Context) {
             (head.physical_width) " x " (head.physical_height) " mm"
             (Color::Yellow.bold().paint("\n  Position: "))
             (head.position_x) "," (head.position_y)
+            if let Some(wl_transform) = head.transform {
+                if let Ok(transform) = Transform::try_from(wl_transform) {
+                    (Color::Yellow.bold().paint("\n  Transform: ")) (transform)
+                }
+            }
             if let Some(sync) = head.adaptive_sync {
                 (Color::Yellow.bold().paint("\n  Adaptive Sync: "))
                 if let AdaptiveSyncState::Enabled = sync {
@@ -224,13 +303,13 @@ fn list(context: &Context) {
                     mode.refresh / 1000,
                     mode.refresh % 1000
                 )),
-                if mode.preferred {
-                    Color::Green.bold().paint(" (preferred)")
+                if head.current_mode.as_ref() == Some(mode_id) {
+                    Color::Purple.bold().paint(" (current)")
                 } else {
                     Color::default().paint("")
                 },
-                if head.current_mode.as_ref() == Some(mode_id) {
-                    Color::Purple.bold().paint(" (current)")
+                if mode.preferred {
+                    Color::Green.bold().paint(" (preferred)")
                 } else {
                     Color::default().paint("")
                 }
@@ -256,6 +335,11 @@ fn list_kdl(context: &Context) {
             " model=\"" (head.model) "\"\n"
             "  physical " (head.physical_width) " " (head.physical_height) "\n"
             "  position " (head.position_x) " " (head.position_y) "\n"
+            if let Some(wl_transform) = head.transform {
+                if let Ok(transform) = Transform::try_from(wl_transform) {
+                    "  transform \"" (transform) "\"\n"
+                }
+            }
             if let Some(sync) = head.adaptive_sync {
                 "  adaptive_sync "
                 if let AdaptiveSyncState::Enabled = sync {
@@ -322,6 +406,10 @@ fn set_mode(context: &mut Context, args: &Mode) -> Result<(), Box<dyn std::error
             .filter_map(|mode_id| context.output_modes.get(mode_id))
             .filter(|mode| mode.width == args.width && mode.height == args.height)
     };
+
+    if let Some(transform) = args.transform {
+        head_config.set_transform(transform.wl_transform());
+    }
 
     if let Some(refresh) = args.refresh {
         #[allow(clippy::cast_possible_truncation)]

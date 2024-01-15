@@ -1,6 +1,8 @@
 // Copyright 2023 System76 <info@system76.com>
 // SPDX-License-Identifier: MPL-2.0
 
+use std::fmt::Display;
+
 use kdl::{KdlDocument, KdlError};
 use slotmap::SlotMap;
 
@@ -42,7 +44,8 @@ pub struct Output {
     pub make: Option<String>,
     pub model: String,
     pub physical: (u32, u32),
-    pub position: (u32, u32),
+    pub position: (i32, i32),
+    pub transform: Option<Transform>,
     pub modes: Vec<ModeKey>,
     pub current: Option<ModeKey>,
 }
@@ -57,9 +60,55 @@ impl Output {
             model: String::new(),
             physical: (0, 0),
             position: (0, 0),
+            transform: None,
             modes: Vec::new(),
             current: None,
         }
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq, PartialOrd, Ord)]
+pub enum Transform {
+    Normal,
+    Rotate90,
+    Rotate180,
+    Rotate270,
+    Flipped,
+    Flipped90,
+    Flipped180,
+    Flipped270,
+}
+
+impl Display for Transform {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(match self {
+            Transform::Normal => "normal",
+            Transform::Rotate90 => "rotate-90",
+            Transform::Rotate180 => "rotate-180",
+            Transform::Rotate270 => "rotate-270",
+            Transform::Flipped => "flipped",
+            Transform::Flipped90 => "flipped-90",
+            Transform::Flipped180 => "flipped-180",
+            Transform::Flipped270 => "flipped-270",
+        })
+    }
+}
+
+impl TryFrom<&str> for Transform {
+    type Error = &'static str;
+
+    fn try_from(value: &str) -> Result<Self, Self::Error> {
+        Ok(match value {
+            "normal" => Transform::Normal,
+            "rotate-90" => Transform::Rotate90,
+            "rotate-180" => Transform::Rotate180,
+            "rotate-270" => Transform::Rotate270,
+            "flipped" => Transform::Flipped,
+            "flipped-90" => Transform::Flipped90,
+            "flipped-180" => Transform::Flipped180,
+            "flipped-270" => Transform::Flipped270,
+            _ => return Err("unknown transform variant"),
+        })
     }
 }
 
@@ -170,8 +219,8 @@ pub async fn list() -> Result<List, Error> {
                 "position" => {
                     if let [x_pos, y_pos, ..] = node.entries() {
                         output.position = (
-                            x_pos.value().as_i64().unwrap_or_default() as u32,
-                            y_pos.value().as_i64().unwrap_or_default() as u32,
+                            x_pos.value().as_i64().unwrap_or_default() as i32,
+                            y_pos.value().as_i64().unwrap_or_default() as i32,
                         );
                     }
                 }
