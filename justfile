@@ -19,7 +19,9 @@ export RUSTFLAGS := linker-arg + env_var_or_default('RUSTFLAGS', '')
 rootdir := ''
 prefix := '/usr'
 
-bin-src := 'target' / 'release' / name
+cargo-target-dir := env('CARGO_TARGET_DIR', 'target')
+
+bin-src := cargo-target-dir / 'release' / name
 bin-dst := clean(rootdir / prefix) / 'bin' / name
 
 default: build-release
