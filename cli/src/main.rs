@@ -29,10 +29,10 @@ struct Mode {
     #[arg(long)]
     refresh: Option<f32>,
     /// Position the output within this x pixel coordinate.
-    #[arg(long)]
+    #[arg(long, allow_hyphen_values(true))]
     pos_x: Option<i32>,
     /// Position the output within this y pixel coordinate.
-    #[arg(long)]
+    #[arg(long, allow_hyphen_values(true))]
     pos_y: Option<i32>,
     /// Changes the dimensions of the output picture.
     #[arg(long)]
