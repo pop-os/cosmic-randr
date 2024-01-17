@@ -351,6 +351,7 @@ fn list(context: &Context) {
             (head.physical_width) " x " (head.physical_height) " mm"
             (Color::Yellow.bold().paint("\n  Position: "))
             (head.position_x) "," (head.position_y)
+            (Color::Yellow.bold().paint("\n  Scale: ")) ((head.scale * 100.0) as i32) "%"
             if let Some(wl_transform) = head.transform {
                 if let Ok(transform) = Transform::try_from(wl_transform) {
                     (Color::Yellow.bold().paint("\n  Transform: ")) (transform)
@@ -416,6 +417,7 @@ fn list_kdl(context: &Context) {
             " model=\"" (head.model) "\"\n"
             "  physical " (head.physical_width) " " (head.physical_height) "\n"
             "  position " (head.position_x) " " (head.position_y) "\n"
+            "  scale " (format!("{:.2}", head.scale)) "\n"
             if let Some(wl_transform) = head.transform {
                 if let Ok(transform) = Transform::try_from(wl_transform) {
                     "  transform \"" (transform) "\"\n"
