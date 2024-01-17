@@ -91,13 +91,13 @@ impl Display for Transform {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str(match self {
             Transform::Normal => "normal",
-            Transform::Rotate90 => "rotate-90",
-            Transform::Rotate180 => "rotate-180",
-            Transform::Rotate270 => "rotate-270",
+            Transform::Rotate90 => "rotate90",
+            Transform::Rotate180 => "rotate180",
+            Transform::Rotate270 => "rotate270",
             Transform::Flipped => "flipped",
-            Transform::Flipped90 => "flipped-90",
-            Transform::Flipped180 => "flipped-180",
-            Transform::Flipped270 => "flipped-270",
+            Transform::Flipped90 => "flipped90",
+            Transform::Flipped180 => "flipped180",
+            Transform::Flipped270 => "flipped270",
         })
     }
 }
