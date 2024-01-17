@@ -2,12 +2,14 @@
 // SPDX-License-Identifier: MPL-2.0
 
 use clap::{Parser, ValueEnum};
+use cosmic_randr::Message;
 use cosmic_randr::{output_head::OutputHead, AdaptiveSyncState, Context};
 use nu_ansi_term::{Color, Style};
 use std::fmt::{Display, Write as FmtWrite};
 use std::io::Write;
+use tachyonix::Receiver;
 use wayland_client::protocol::wl_output::Transform as WlTransform;
-use wayland_client::Proxy;
+use wayland_client::{EventQueue, Proxy};
 
 /// Display and configure wayland outputs
 #[derive(clap::Parser, Debug)]
@@ -62,6 +64,15 @@ enum Commands {
 
     /// Set a mode for a display.
     Mode(Mode),
+
+    /// Set position of display.
+    Position {
+        output: String,
+        x: i32,
+        y: i32,
+        #[arg(long)]
+        test: bool,
+    },
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, PartialOrd, Ord, ValueEnum)]
@@ -129,67 +140,137 @@ impl Transform {
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let cli = Cli::parse();
 
-    let (message_tx, mut message_rx) = tachyonix::channel(4);
+    let (message_tx, message_rx) = tachyonix::channel(4);
 
     let (mut context, mut event_queue) = cosmic_randr::connect(message_tx)?;
 
     let _res = event_queue.roundtrip(&mut context);
 
+    let mut app = App {
+        context,
+        event_queue,
+        message_rx,
+    };
+
     match cli.command {
-        Commands::Enable { output } => loop {
-            tokio::select! {
-                _res = context.dispatch(&mut event_queue) => {
-                    return enable(&mut context, &output);
-                }
+        Commands::Enable { output } => app.enable(&output).await,
 
-                message = message_rx.recv() => {
-                    if config_message(message)? {
-                        return Ok(());
-                    }
-                }
-            }
-        },
+        Commands::Disable { output } => app.disable(&output).await,
 
-        Commands::Disable { output } => loop {
-            tokio::select! {
-                _res = context.dispatch(&mut event_queue) => {
-                    return disable(&mut context, &output);
-                }
+        Commands::List { kdl } => app.list(kdl).await,
 
-                message = message_rx.recv() => {
-                    if config_message(message)? {
-                        return Ok(());
-                    }
-                }
-            }
-        },
+        Commands::Mode(mode) => app.mode(mode).await,
 
-        Commands::List { kdl } => {
-            let _res = context.dispatch(&mut event_queue).await;
+        Commands::Position { output, x, y, test } => {
+            app.set_offset_positions(&output, x, y, test).await
+        }
+    }
+}
 
-            if kdl {
-                list_kdl(&context);
-            } else {
-                list(&context);
-            }
+struct App {
+    context: Context,
+    event_queue: EventQueue<Context>,
+    message_rx: Receiver<Message>,
+}
 
-            return Ok(());
+impl App {
+    async fn enable(&mut self, output: &str) -> Result<(), Box<dyn std::error::Error>> {
+        let _res = self.context.dispatch(&mut self.event_queue).await;
+        enable(&mut self.context, output)?;
+        let _res = self.context.dispatch(&mut self.event_queue).await;
+        receive_messages(&mut self.message_rx).await?;
+
+        Ok(())
+    }
+
+    async fn disable(&mut self, output: &str) -> Result<(), Box<dyn std::error::Error>> {
+        let _res = self.context.dispatch(&mut self.event_queue).await;
+        disable(&mut self.context, output)?;
+        let _res = self.context.dispatch(&mut self.event_queue).await;
+        receive_messages(&mut self.message_rx).await?;
+
+        Ok(())
+    }
+
+    async fn list(&mut self, kdl: bool) -> Result<(), Box<dyn std::error::Error>> {
+        let _res = self.context.dispatch(&mut self.event_queue).await;
+
+        if kdl {
+            list_kdl(&self.context);
+        } else {
+            list(&self.context);
         }
 
-        Commands::Mode(mode) => loop {
-            tokio::select! {
-                _res = context.dispatch(&mut event_queue) => {
-                    set_mode(&mut context, &mode)?;
-                }
-
-                message = message_rx.recv() => {
-                    if config_message(message)? {
-                        return Ok(());
-                    }
-                }
-            }
-        },
+        Ok(())
     }
+
+    async fn mode(&mut self, mode: Mode) -> Result<(), Box<dyn std::error::Error>> {
+        let _res = self.context.dispatch(&mut self.event_queue).await;
+        set_mode(&mut self.context, &mode)?;
+        let _res = self.context.dispatch(&mut self.event_queue).await;
+        receive_messages(&mut self.message_rx).await?;
+
+        // Offset outputs in case of negative positioning.
+        if let Some((x, y)) = mode.pos_x.zip(mode.pos_y) {
+            self.set_offset_positions(&mode.output, x, y, mode.test)
+                .await?;
+        }
+
+        Ok(())
+    }
+
+    // Offset outputs in case of negative positioning.
+    async fn set_offset_positions(
+        &mut self,
+        output: &str,
+        x: i32,
+        y: i32,
+        test: bool,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let mut updates = Vec::new();
+
+        let mut offset = (i32::MAX, i32::MAX);
+        for head in self.context.output_heads.values() {
+            offset = if head.name == output {
+                (offset.0.min(x), offset.1.min(y))
+            } else {
+                (offset.0.min(head.position_x), offset.1.min(head.position_y))
+            }
+        }
+
+        for head in self.context.output_heads.values() {
+            let (x, y) = if head.name == output {
+                (x, y)
+            } else {
+                (head.position_x, head.position_y)
+            };
+
+            updates.push((head.name.clone(), x - offset.0, y - offset.1));
+        }
+
+        for (name, x, y) in updates {
+            set_position(&mut self.context, &name, x, y, test)?;
+            let _res = self.context.dispatch(&mut self.event_queue).await;
+            receive_messages(&mut self.message_rx).await?;
+        }
+
+        Ok(())
+    }
+}
+
+/// # Errors
+///
+/// Returns error if the message receiver fails, or a configuration failed.
+pub async fn receive_messages(
+    message_rx: &mut Receiver<Message>,
+) -> Result<(), Box<dyn std::error::Error>> {
+    config_message(message_rx.recv().await)?;
+
+    while let Ok(message) = message_rx.try_recv() {
+        config_message(Ok(message))?;
+    }
+
+    Ok(())
 }
 
 /// Handles output configuration messages.
@@ -392,10 +473,6 @@ fn set_mode(context: &mut Context, args: &Mode) -> Result<(), Box<dyn std::error
     let config = context.create_output_config();
     let head_config = config.enable_head(&head.wlr_head, &context.handle, context.data);
 
-    if let Some((x, y)) = args.pos_x.zip(args.pos_y) {
-        head_config.set_position(x, y);
-    }
-
     if let Some(scale) = args.scale {
         head_config.set_scale(f64::from(scale));
     }
@@ -438,6 +515,29 @@ fn set_mode(context: &mut Context, args: &Mode) -> Result<(), Box<dyn std::error
     head_config.set_mode(&mode.wlr_mode);
 
     if args.test {
+        config.test();
+    } else {
+        config.apply();
+    }
+
+    Ok(())
+}
+
+fn set_position(
+    context: &mut Context,
+    name: &str,
+    x: i32,
+    y: i32,
+    test: bool,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let head = get_output_head(context, name)?;
+
+    let config = context.create_output_config();
+    let head_config = config.enable_head(&head.wlr_head, &context.handle, context.data);
+
+    head_config.set_position(x, y);
+
+    if test {
         config.test();
     } else {
         config.apply();
