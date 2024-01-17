@@ -225,6 +225,15 @@ pub async fn list() -> Result<List, Error> {
                     }
                 }
 
+                // Parse the transform value of the output.
+                "transform" => {
+                    if let Some(entry) = node.entries().first() {
+                        if let Some(string) = entry.value().as_string() {
+                            output.transform = Transform::try_from(string).ok();
+                        }
+                    }
+                }
+
                 // Switch to parsing output modes.
                 "modes" => {
                     let Some(children) = node.children() else {
