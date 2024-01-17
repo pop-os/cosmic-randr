@@ -45,6 +45,7 @@ pub struct Output {
     pub model: String,
     pub physical: (u32, u32),
     pub position: (i32, i32),
+    pub scale: f64,
     pub transform: Option<Transform>,
     pub modes: Vec<ModeKey>,
     pub current: Option<ModeKey>,
@@ -60,6 +61,7 @@ impl Output {
             model: String::new(),
             physical: (0, 0),
             position: (0, 0),
+            scale: 1.0,
             transform: None,
             modes: Vec::new(),
             current: None,
@@ -222,6 +224,14 @@ pub async fn list() -> Result<List, Error> {
                             x_pos.value().as_i64().unwrap_or_default() as i32,
                             y_pos.value().as_i64().unwrap_or_default() as i32,
                         );
+                    }
+                }
+
+                "scale" => {
+                    if let Some(entry) = node.entries().first() {
+                        if let Some(scale) = entry.value().as_f64() {
+                            output.scale = scale;
+                        }
                     }
                 }
 
