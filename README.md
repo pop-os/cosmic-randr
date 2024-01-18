@@ -6,7 +6,7 @@ COSMIC RandR is both a library and command line utility for displaying and confi
 
 All COSMIC installations have `cosmic-randr` preinstalled on the system. This can be used to list and configure outputs from the terminal.
 
-Those that want to integrate with this binary in their software can use `cosmic-randr list --kdl` to get a list of outputs and their modes in the [KDL syntax format](kdl.dev). Rust developers can use the `cosmic-randr-shell` crate provided here for the same integration.
+Those that want to integrate with this binary in their software can use `cosmic-randr list --kdl` to get a list of outputs and their modes in the [KDL syntax format](https://kdl.dev). Rust developers can use the `cosmic-randr-shell` crate provided here for the same integration.
 
 ## License
 
