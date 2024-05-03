@@ -1,16 +1,17 @@
 // Copyright 2023 System76 <info@system76.com>
 // SPDX-License-Identifier: MPL-2.0
 
-use crate::{Context, Data, Message};
+use crate::{Context, Message};
+use cosmic_protocols::output_management::v1::client::zcosmic_output_manager_v1::ZcosmicOutputManagerV1;
 use wayland_client::{protocol::wl_registry, Connection, Dispatch, QueueHandle};
 use wayland_protocols_wlr::output_management::v1::client::zwlr_output_manager_v1::ZwlrOutputManagerV1;
 
-impl Dispatch<wl_registry::WlRegistry, Data> for Context {
+impl Dispatch<wl_registry::WlRegistry, ()> for Context {
     fn event(
         state: &mut Self,
         registry: &wl_registry::WlRegistry,
         event: wl_registry::Event,
-        _data: &Data,
+        _data: &(),
         _conn: &Connection,
         handle: &QueueHandle<Self>,
     ) {
@@ -34,8 +35,16 @@ impl Dispatch<wl_registry::WlRegistry, Data> for Context {
                 }
 
                 state.output_manager_version = version;
-                state.output_manager =
-                    Some(registry.bind::<ZwlrOutputManagerV1, _, _>(name, version, handle, Data));
+                state.output_manager = Some(registry.bind::<ZwlrOutputManagerV1, _, _>(
+                    name,
+                    version.min(4),
+                    handle,
+                    (),
+                ));
+            }
+            if "zcosmic_output_manager_v1" == &interface[..] {
+                state.cosmic_output_manager =
+                    Some(registry.bind::<ZcosmicOutputManagerV1, _, _>(name, 1, handle, ()))
             }
         }
     }

@@ -1,8 +1,13 @@
 // Copyright 2023 System76 <info@system76.com>
 // SPDX-License-Identifier: MPL-2.0
 
-use crate::{Context, Data, OutputMode};
+use std::collections::HashMap;
+use std::sync::Mutex;
 
+use crate::{Context, OutputMode};
+
+use cosmic_protocols::output_management::v1::client::zcosmic_output_head_v1::Event as ZcosmicOutputHeadEvent;
+use cosmic_protocols::output_management::v1::client::zcosmic_output_head_v1::ZcosmicOutputHeadV1;
 use wayland_client::backend::ObjectId;
 use wayland_client::event_created_child;
 use wayland_client::protocol::wl_output::Transform;
@@ -22,7 +27,7 @@ pub struct OutputHead {
     pub enabled: bool,
     pub make: String,
     pub model: String,
-    pub modes: Vec<ObjectId>,
+    pub modes: HashMap<ObjectId, OutputMode>,
     pub name: String,
     pub physical_height: i32,
     pub physical_width: i32,
@@ -31,15 +36,16 @@ pub struct OutputHead {
     pub scale: f64,
     pub serial_number: String,
     pub transform: Option<Transform>,
+    pub mirroring: Option<String>,
     pub wlr_head: ZwlrOutputHeadV1,
 }
 
-impl Dispatch<ZwlrOutputHeadV1, Data> for Context {
+impl Dispatch<ZwlrOutputHeadV1, ()> for Context {
     fn event(
         state: &mut Self,
         proxy: &ZwlrOutputHeadV1,
         event: <ZwlrOutputHeadV1 as Proxy>::Event,
-        _: &Data,
+        _: &(),
         _: &Connection,
         _handle: &QueueHandle<Self>,
     ) {
@@ -62,10 +68,12 @@ impl Dispatch<ZwlrOutputHeadV1, Data> for Context {
             }
 
             ZwlrOutputHeadEvent::Mode { mode } => {
-                let mode_id = mode.id();
-                head.modes.push(mode_id.clone());
-                state.mode_to_head_ids.insert(mode_id.clone(), proxy.id());
-                state.output_modes.insert(mode_id, OutputMode::new(mode));
+                *mode
+                    .data::<Mutex<Option<ObjectId>>>()
+                    .unwrap()
+                    .lock()
+                    .unwrap() = Some(proxy.id());
+                head.modes.insert(mode.id(), OutputMode::new(mode));
             }
 
             ZwlrOutputHeadEvent::Enabled { enabled } => {
@@ -89,7 +97,9 @@ impl Dispatch<ZwlrOutputHeadV1, Data> for Context {
             }
 
             ZwlrOutputHeadEvent::Finished => {
-                proxy.release();
+                if proxy.version() >= 3 {
+                    proxy.release();
+                }
                 state.output_heads.remove(&proxy.id());
             }
 
@@ -114,8 +124,34 @@ impl Dispatch<ZwlrOutputHeadV1, Data> for Context {
     }
 
     event_created_child!(Context, ZwlrOutputManagerV1, [
-        EVT_MODE_OPCODE => (ZwlrOutputModeV1, Data),
+        EVT_MODE_OPCODE => (ZwlrOutputModeV1, Mutex::new(None)),
     ]);
+}
+
+impl Dispatch<ZcosmicOutputHeadV1, ObjectId> for Context {
+    fn event(
+        state: &mut Self,
+        _proxy: &ZcosmicOutputHeadV1,
+        event: <ZcosmicOutputHeadV1 as Proxy>::Event,
+        data: &ObjectId,
+        _conn: &Connection,
+        _qhandle: &QueueHandle<Self>,
+    ) {
+        let head = state
+            .output_heads
+            .get_mut(data)
+            .expect("Inert CosmicOutputHead");
+
+        match event {
+            ZcosmicOutputHeadEvent::Scale1000 { scale_1000 } => {
+                head.scale = (scale_1000 as f64) / 1000.0;
+            }
+            ZcosmicOutputHeadEvent::Mirroring { name } => {
+                head.mirroring = name;
+            }
+            _ => tracing::debug!(?event, "unknown event"),
+        }
+    }
 }
 
 impl OutputHead {
@@ -128,7 +164,7 @@ impl OutputHead {
             enabled: false,
             make: String::new(),
             model: String::new(),
-            modes: Vec::new(),
+            modes: HashMap::new(),
             name: String::new(),
             physical_height: 0,
             physical_width: 0,
@@ -137,6 +173,7 @@ impl OutputHead {
             scale: 1.0,
             serial_number: String::new(),
             transform: None,
+            mirroring: None,
             wlr_head,
         }
     }

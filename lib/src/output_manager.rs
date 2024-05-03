@@ -2,8 +2,9 @@
 // SPDX-License-Identifier: MPL-2.0
 
 use super::output_head::OutputHead;
-use crate::{Context, Data, Message};
+use crate::{Context, Message};
 
+use cosmic_protocols::output_management::v1::client::zcosmic_output_manager_v1::ZcosmicOutputManagerV1;
 use wayland_client::event_created_child;
 use wayland_client::{Connection, Dispatch, Proxy, QueueHandle};
 use wayland_protocols_wlr::output_management::v1::client::zwlr_output_head_v1::ZwlrOutputHeadV1;
@@ -11,17 +12,20 @@ use wayland_protocols_wlr::output_management::v1::client::zwlr_output_manager_v1
 use wayland_protocols_wlr::output_management::v1::client::zwlr_output_manager_v1::ZwlrOutputManagerV1;
 use wayland_protocols_wlr::output_management::v1::client::zwlr_output_manager_v1::EVT_HEAD_OPCODE;
 
-impl Dispatch<ZwlrOutputManagerV1, Data> for Context {
+impl Dispatch<ZwlrOutputManagerV1, ()> for Context {
     fn event(
         state: &mut Self,
         _proxy: &ZwlrOutputManagerV1,
         event: <ZwlrOutputManagerV1 as Proxy>::Event,
-        _data: &Data,
+        _data: &(),
         _conn: &Connection,
-        _handle: &QueueHandle<Self>,
+        handle: &QueueHandle<Self>,
     ) {
         match event {
             ZwlrOutputManagerEvent::Head { head } => {
+                if let Some(cosmic_extension) = state.cosmic_output_manager.as_ref() {
+                    cosmic_extension.get_head(&head, handle, head.id());
+                }
                 state.output_heads.insert(head.id(), OutputHead::new(head));
             }
 
@@ -45,6 +49,18 @@ impl Dispatch<ZwlrOutputManagerV1, Data> for Context {
     }
 
     event_created_child!(Context, ZwlrOutputManagerV1, [
-        EVT_HEAD_OPCODE=> (ZwlrOutputHeadV1, Data),
+        EVT_HEAD_OPCODE=> (ZwlrOutputHeadV1, ()),
     ]);
+}
+
+impl Dispatch<ZcosmicOutputManagerV1, ()> for Context {
+    fn event(
+        _state: &mut Self,
+        _proxy: &ZcosmicOutputManagerV1,
+        _event: <ZcosmicOutputManagerV1 as Proxy>::Event,
+        _data: &(),
+        _conn: &Connection,
+        _handle: &QueueHandle<Self>,
+    ) {
+    }
 }

@@ -2,8 +2,9 @@
 // SPDX-License-Identifier: MPL-2.0
 
 use clap::{Parser, ValueEnum};
+use cosmic_randr::context::HeadConfiguration;
 use cosmic_randr::Message;
-use cosmic_randr::{output_head::OutputHead, AdaptiveSyncState, Context};
+use cosmic_randr::{AdaptiveSyncState, Context};
 use nu_ansi_term::{Color, Style};
 use std::fmt::{Display, Write as FmtWrite};
 use std::io::Write;
@@ -38,13 +39,30 @@ struct Mode {
     pos_y: Option<i32>,
     /// Changes the dimensions of the output picture.
     #[arg(long)]
-    scale: Option<f32>,
+    scale: Option<f64>,
     /// Tests the output configuration without applying it.
     #[arg(long)]
     test: bool,
     /// Specifies a transformation matrix to apply to the output.
     #[arg(long, value_enum)]
     transform: Option<Transform>,
+}
+
+impl Mode {
+    fn to_head_config(&self) -> HeadConfiguration {
+        HeadConfiguration {
+            size: Some((self.width as u32, self.height as u32)),
+            refresh: self.refresh,
+            pos: (self.pos_x.is_some() || self.pos_y.is_some()).then(|| {
+                (
+                    self.pos_x.unwrap_or_default(),
+                    self.pos_y.unwrap_or_default(),
+                )
+            }),
+            scale: self.scale,
+            transform: self.transform.map(|transform| transform.wl_transform()),
+        }
+    }
 }
 
 #[derive(clap::Subcommand, Debug)]
@@ -54,6 +72,9 @@ enum Commands {
 
     /// Enable a display
     Enable { output: String },
+
+    /// Mirror a display
+    Mirror { output: String, from: String },
 
     /// List available output heads and modes.
     List {
@@ -140,11 +161,9 @@ impl Transform {
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let cli = Cli::parse();
 
-    let (message_tx, message_rx) = tachyonix::channel(4);
+    let (message_tx, message_rx) = tachyonix::channel(5);
 
-    let (mut context, mut event_queue) = cosmic_randr::connect(message_tx)?;
-
-    let _res = event_queue.roundtrip(&mut context);
+    let (context, event_queue) = cosmic_randr::connect(message_tx)?;
 
     let mut app = App {
         context,
@@ -154,6 +173,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     match cli.command {
         Commands::Enable { output } => app.enable(&output).await,
+
+        Commands::Mirror { output, from } => app.mirror(&output, &from).await,
 
         Commands::Disable { output } => app.disable(&output).await,
 
@@ -177,6 +198,15 @@ impl App {
     async fn enable(&mut self, output: &str) -> Result<(), Box<dyn std::error::Error>> {
         let _res = self.context.dispatch(&mut self.event_queue).await;
         enable(&mut self.context, output)?;
+        let _res = self.context.dispatch(&mut self.event_queue).await;
+        receive_messages(&mut self.message_rx).await?;
+
+        Ok(())
+    }
+
+    async fn mirror(&mut self, output: &str, from: &str) -> Result<(), Box<dyn std::error::Error>> {
+        let _res = self.context.dispatch(&mut self.event_queue).await;
+        mirror(&mut self.context, output, from)?;
         let _res = self.context.dispatch(&mut self.event_queue).await;
         receive_messages(&mut self.message_rx).await?;
 
@@ -211,7 +241,12 @@ impl App {
         receive_messages(&mut self.message_rx).await?;
 
         // Offset outputs in case of negative positioning.
-        if let Some((x, y)) = mode.pos_x.zip(mode.pos_y) {
+        if let Some((x, y)) = (mode.pos_x.is_some() || mode.pos_y.is_some()).then(|| {
+            (
+                mode.pos_x.unwrap_or_default(),
+                mode.pos_y.unwrap_or_default(),
+            )
+        }) {
             self.set_offset_positions(&mode.output, x, y, mode.test)
                 .await?;
         }
@@ -295,34 +330,29 @@ pub fn config_message(
     }
 }
 
-fn get_output_head(
-    context: &mut Context,
-    output: &str,
-) -> Result<OutputHead, Box<dyn std::error::Error>> {
-    context
-        .output_heads
-        .iter()
-        .filter(|(_id, head)| head.wlr_head.is_alive())
-        .find(|(_id, head)| head.name == output)
-        .map(|(_id, head)| (head.clone()))
-        .ok_or_else(|| "could not find display".into())
-}
-
 fn disable(context: &mut Context, output: &str) -> Result<(), Box<dyn std::error::Error>> {
-    let head = get_output_head(context, output)?;
-
-    let config = context.create_output_config();
-    config.disable_head(&head.wlr_head);
+    let mut config = context.create_output_config();
+    config.disable_head(output)?;
     config.apply();
 
     Ok(())
 }
 
 fn enable(context: &mut Context, output: &str) -> Result<(), Box<dyn std::error::Error>> {
-    let head = get_output_head(context, output)?;
+    let mut config = context.create_output_config();
+    config.enable_head(output, None)?;
+    config.apply();
 
-    let config = context.create_output_config();
-    config.enable_head(&head.wlr_head, &context.handle, context.data);
+    Ok(())
+}
+
+fn mirror(
+    context: &mut Context,
+    output: &str,
+    from: &str,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let mut config = context.create_output_config();
+    config.mirror_head(output, from, None)?;
     config.apply();
 
     Ok(())
@@ -338,7 +368,11 @@ fn list(context: &Context) {
             &mut output,
             (Style::new().bold().paint(&head.name)) " "
             if head.enabled {
-                (Color::Green.bold().paint("(enabled)"))
+                if let Some(from) = head.mirroring.as_ref() {
+                    (Color::Blue.bold().paint(format!("(mirroring \"{}\")", from)))
+                } else {
+                    (Color::Green.bold().paint("(enabled)"))
+                }
             } else {
                 (Color::Red.bold().paint("(disabled)"))
             }
@@ -368,11 +402,7 @@ fn list(context: &Context) {
             (Color::Yellow.bold().paint("\n  Modes:"))
         );
 
-        for mode_id in &head.modes {
-            let Some(mode) = context.output_modes.get(mode_id) else {
-                continue;
-            };
-
+        for mode in head.modes.values() {
             resolution.clear();
             let _res = write!(&mut resolution, "{}x{}", mode.width, mode.height);
 
@@ -385,7 +415,7 @@ fn list(context: &Context) {
                     mode.refresh / 1000,
                     mode.refresh % 1000
                 )),
-                if head.current_mode.as_ref() == Some(mode_id) {
+                if head.current_mode.as_ref() == Some(&mode.wlr_mode.id()) {
                     Color::Purple.bold().paint(" (current)")
                 } else {
                     Color::default().paint("")
@@ -418,6 +448,9 @@ fn list_kdl(context: &Context) {
             "  physical " (head.physical_width) " " (head.physical_height) "\n"
             "  position " (head.position_x) " " (head.position_y) "\n"
             "  scale " (format!("{:.2}", head.scale)) "\n"
+            if let Some(mirroring) = head.mirroring.as_ref() {
+                "  mirroring \"" (mirroring) "\"\n"
+            }
             if let Some(wl_transform) = head.transform {
                 if let Ok(transform) = Transform::try_from(wl_transform) {
                     "  transform \"" (transform) "\"\n"
@@ -437,18 +470,14 @@ fn list_kdl(context: &Context) {
             "  modes {"
         );
 
-        for mode_id in &head.modes {
-            let Some(mode) = context.output_modes.get(mode_id) else {
-                continue;
-            };
-
+        for mode in head.modes.values() {
             let _res = writeln!(
                 &mut output,
                 "    mode {} {} {}{}{}",
                 mode.width,
                 mode.height,
                 mode.refresh,
-                if head.current_mode.as_ref() == Some(mode_id) {
+                if head.current_mode.as_ref() == Some(&mode.wlr_mode.id()) {
                     " current=true"
                 } else {
                     ""
@@ -470,51 +499,20 @@ fn list_kdl(context: &Context) {
 }
 
 fn set_mode(context: &mut Context, args: &Mode) -> Result<(), Box<dyn std::error::Error>> {
-    let head = get_output_head(context, &args.output)?;
+    let mirroring = context
+        .output_heads
+        .values()
+        .find(|output| output.name == args.output)
+        .and_then(|head| head.mirroring.clone());
 
-    let config = context.create_output_config();
-    let head_config = config.enable_head(&head.wlr_head, &context.handle, context.data);
+    let mut config = context.create_output_config();
+    let head_config = args.to_head_config();
 
-    if let Some(scale) = args.scale {
-        head_config.set_scale(f64::from(scale));
+    if let Some(mirroring_from) = mirroring.filter(|_| head_config.pos.is_none()) {
+        config.mirror_head(&args.output, &mirroring_from, Some(head_config))?;
+    } else {
+        config.enable_head(&args.output, Some(args.to_head_config()))?;
     }
-
-    let mode_iter = || {
-        head.modes
-            .iter()
-            .filter_map(|mode_id| context.output_modes.get(mode_id))
-            .filter(|mode| mode.width == args.width && mode.height == args.height)
-    };
-
-    if let Some(transform) = args.transform {
-        head_config.set_transform(transform.wl_transform());
-    }
-
-    if let Some(refresh) = args.refresh {
-        #[allow(clippy::cast_possible_truncation)]
-        let refresh = (refresh * 1000.0) as i32;
-
-        let min = refresh - 501;
-        let max = refresh + 501;
-
-        if let Some(mode) = mode_iter().find(|mode| min < mode.refresh && max > mode.refresh) {
-            head_config.set_mode(&mode.wlr_mode);
-
-            if args.test {
-                config.test();
-            } else {
-                config.apply();
-            }
-
-            return Ok(());
-        }
-    }
-
-    let Some(mode) = mode_iter().next() else {
-        return Err("could not find matching mode for display".into());
-    };
-
-    head_config.set_mode(&mode.wlr_mode);
 
     if args.test {
         config.test();
@@ -532,12 +530,14 @@ fn set_position(
     y: i32,
     test: bool,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let head = get_output_head(context, name)?;
-
-    let config = context.create_output_config();
-    let head_config = config.enable_head(&head.wlr_head, &context.handle, context.data);
-
-    head_config.set_position(x, y);
+    let mut config = context.create_output_config();
+    config.enable_head(
+        name,
+        Some(HeadConfiguration {
+            pos: Some((x, y)),
+            ..Default::default()
+        }),
+    )?;
 
     if test {
         config.test();
