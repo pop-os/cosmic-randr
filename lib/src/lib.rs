@@ -3,7 +3,6 @@
 
 pub mod context;
 pub use context::Context;
-use context::Data;
 
 pub mod output_configuration;
 pub mod output_configuration_head;
