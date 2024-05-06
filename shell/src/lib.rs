@@ -41,6 +41,7 @@ pub struct List {
 pub struct Output {
     pub name: String,
     pub enabled: bool,
+    pub mirroring: Option<String>,
     pub make: Option<String>,
     pub model: String,
     pub physical: (u32, u32),
@@ -57,6 +58,7 @@ impl Output {
         Self {
             name: String::new(),
             enabled: false,
+            mirroring: None,
             make: None,
             model: String::new(),
             physical: (0, 0),
@@ -280,6 +282,14 @@ pub async fn list() -> Result<List, Error> {
                             }
 
                             output.modes.push(mode_id);
+                        }
+                    }
+                }
+
+                "mirroring" => {
+                    if let Some(entry) = node.entries().first() {
+                        if let Some(string) = entry.value().as_string() {
+                            output.mirroring = Some(string.to_string());
                         }
                     }
                 }
