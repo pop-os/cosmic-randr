@@ -224,6 +224,10 @@ impl App {
 
     async fn list(&mut self, kdl: bool) -> Result<(), Box<dyn std::error::Error>> {
         let _res = self.context.dispatch(&mut self.event_queue).await;
+        for head in self.context.output_heads.values_mut() {
+            head.modes
+                .sort_unstable_by(|_, either, _, or| either.cmp(or));
+        }
 
         if kdl {
             list_kdl(&self.context);

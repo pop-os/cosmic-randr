@@ -14,3 +14,4 @@ tracing = "0.1.40"
 wayland-client = "0.31.1"
 wayland-protocols-wlr = { version = "0.2.0", features = [ "client", "wayland-client" ] }
 cosmic-protocols = { git = "https://github.com/pop-os/cosmic-protocols.git" }
+indexmap = "2.2.6"

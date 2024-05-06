@@ -1,13 +1,13 @@
 // Copyright 2023 System76 <info@system76.com>
 // SPDX-License-Identifier: MPL-2.0
 
-use std::collections::HashMap;
 use std::sync::Mutex;
 
 use crate::{Context, OutputMode};
 
 use cosmic_protocols::output_management::v1::client::zcosmic_output_head_v1::Event as ZcosmicOutputHeadEvent;
 use cosmic_protocols::output_management::v1::client::zcosmic_output_head_v1::ZcosmicOutputHeadV1;
+use indexmap::IndexMap;
 use wayland_client::backend::ObjectId;
 use wayland_client::event_created_child;
 use wayland_client::protocol::wl_output::Transform;
@@ -27,7 +27,7 @@ pub struct OutputHead {
     pub enabled: bool,
     pub make: String,
     pub model: String,
-    pub modes: HashMap<ObjectId, OutputMode>,
+    pub modes: IndexMap<ObjectId, OutputMode>,
     pub name: String,
     pub physical_height: i32,
     pub physical_width: i32,
@@ -164,7 +164,7 @@ impl OutputHead {
             enabled: false,
             make: String::new(),
             model: String::new(),
-            modes: HashMap::new(),
+            modes: IndexMap::new(),
             name: String::new(),
             physical_height: 0,
             physical_width: 0,
