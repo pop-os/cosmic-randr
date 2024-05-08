@@ -254,7 +254,11 @@ fn send_mode_to_config_head(
         let min = refresh - 501;
         let max = refresh + 501;
 
-        if let Some(mode) = mode_iter().find(|mode| min < mode.refresh && max > mode.refresh) {
+        let mode = mode_iter()
+            .find(|mode| mode.refresh == refresh)
+            .or_else(|| mode_iter().find(|mode| min < mode.refresh && max > mode.refresh));
+
+        if let Some(mode) = mode {
             head_config.set_mode(&mode.wlr_mode);
             Ok(())
         } else {
