@@ -415,7 +415,7 @@ fn list(context: &Context) {
                 "    {:>9} @ {}{}{}",
                 Color::Magenta.paint(format!("{resolution:>9}")),
                 Color::Cyan.paint(format!(
-                    "{:>3}.{:02} Hz",
+                    "{:>3}.{:03} Hz",
                     mode.refresh / 1000,
                     mode.refresh % 1000
                 )),
