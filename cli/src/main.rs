@@ -182,9 +182,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
         Commands::Mode(mode) => app.mode(mode).await,
 
-        Commands::Position { output, x, y, test } => {
-            app.set_offset_positions(&output, x, y, test).await
-        }
+        Commands::Position { output, x, y, test } => app.set_position(&output, x, y, test).await,
     }
 }
 
@@ -258,36 +256,69 @@ impl App {
         Ok(())
     }
 
-    // Offset outputs in case of negative positioning.
-    async fn set_offset_positions(
+    async fn set_position(
         &mut self,
         output: &str,
         x: i32,
         y: i32,
         test: bool,
     ) -> Result<(), Box<dyn std::error::Error>> {
+        set_position(&mut self.context, output, x, y, test)?;
+        let _res = self.context.dispatch(&mut self.event_queue).await;
+        receive_messages(&mut self.message_rx).await?;
+
+        self.set_offset_positions(output, x, y, test).await?;
+        Ok(())
+    }
+
+    // Offset outputs in case of negative positioning.
+    async fn set_offset_positions(
+        &mut self,
+        _output: &str,
+        x: i32,
+        y: i32,
+        test: bool,
+    ) -> Result<(), Box<dyn std::error::Error>> {
         let mut updates = Vec::new();
 
-        let mut offset = (i32::MAX, i32::MAX);
+        // Adjust to prevent negative positioning
+        let mut offset = (x, y);
         for head in self.context.output_heads.values() {
-            offset = if head.name == output {
-                (offset.0.min(x), offset.1.min(y))
-            } else {
-                (offset.0.min(head.position_x), offset.1.min(head.position_y))
-            }
+            offset = (offset.0.min(head.position_x), offset.1.min(head.position_y));
         }
 
         for head in self.context.output_heads.values() {
-            let (x, y) = if head.name == output {
-                (x, y)
-            } else {
-                (head.position_x, head.position_y)
+            let Some(ref mode) = head.current_mode else {
+                continue;
             };
 
-            updates.push((head.name.clone(), x - offset.0, y - offset.1));
+            let Some(mode) = head.modes.get(mode) else {
+                continue;
+            };
+
+            updates.push((
+                head.name.clone(),
+                head.position_x - offset.0,
+                head.position_y - offset.1,
+                mode.width,
+                mode.height,
+            ));
         }
 
-        for (name, x, y) in updates {
+        // Adjust to (0,0) baseline
+        offset = (i32::MAX, i32::MAX);
+
+        for (_name, x, y, ..) in &updates {
+            offset = (offset.0.min(*x), offset.1.min(*y));
+        }
+
+        for (_name, x, y, ..) in &mut updates {
+            *x -= offset.0;
+            *y -= offset.1;
+        }
+
+        // Apply new positions
+        for (name, x, y, ..) in updates {
             set_position(&mut self.context, &name, x, y, test)?;
             let _res = self.context.dispatch(&mut self.event_queue).await;
             receive_messages(&mut self.message_rx).await?;
