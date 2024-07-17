@@ -256,10 +256,11 @@ fn send_mode_to_config_head(
 
         let mode = mode_iter()
             .find(|mode| mode.refresh == refresh)
-            .or_else(|| mode_iter()
-                .filter(|mode| min < mode.refresh && max > mode.refresh)
-                .min_by_key(|mode| (mode.refresh - refresh).abs())
-            );
+            .or_else(|| {
+                mode_iter()
+                    .filter(|mode| min < mode.refresh && max > mode.refresh)
+                    .min_by_key(|mode| (mode.refresh - refresh).abs())
+            });
 
         if let Some(mode) = mode {
             head_config.set_mode(&mode.wlr_mode);

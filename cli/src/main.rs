@@ -1,6 +1,8 @@
 // Copyright 2023 System76 <info@system76.com>
 // SPDX-License-Identifier: MPL-2.0
 
+pub mod align;
+
 use clap::{Parser, ValueEnum};
 use cosmic_randr::context::HeadConfiguration;
 use cosmic_randr::Message;
@@ -274,51 +276,120 @@ impl App {
     // Offset outputs in case of negative positioning.
     async fn set_offset_positions(
         &mut self,
-        _output: &str,
+        output: &str,
         x: i32,
         y: i32,
         test: bool,
     ) -> Result<(), Box<dyn std::error::Error>> {
-        let mut updates = Vec::new();
+        // Get the position and dimensions of the moved display.
+        let Some(ref mut active_output) = self
+            .context
+            .output_heads
+            .values()
+            .find(|head| head.name == output)
+            .and_then(|head| {
+                let Some(ref mode) = head.current_mode else {
+                    return None;
+                };
 
-        // Adjust to prevent negative positioning
-        let mut offset = (x, y);
-        for head in self.context.output_heads.values() {
-            offset = (offset.0.min(head.position_x), offset.1.min(head.position_y));
-        }
+                let Some(mode) = head.modes.get(mode) else {
+                    return None;
+                };
 
-        for head in self.context.output_heads.values() {
-            let Some(ref mode) = head.current_mode else {
-                continue;
-            };
+                let (width, height) = if head.transform.map_or(true, |wl_transform| {
+                    Transform::try_from(wl_transform).map_or(true, is_landscape)
+                }) {
+                    (mode.width, mode.height)
+                } else {
+                    (mode.height, mode.width)
+                };
 
-            let Some(mode) = head.modes.get(mode) else {
-                continue;
-            };
+                Some(align::Rectangle {
+                    x: x as f32,
+                    y: y as f32,
+                    width: width as f32 / head.scale as f32,
+                    height: height as f32 / head.scale as f32,
+                })
+            })
+        else {
+            return Ok(());
+        };
 
-            updates.push((
-                head.name.clone(),
-                head.position_x - offset.0,
-                head.position_y - offset.1,
-                mode.width,
-                mode.height,
-            ));
-        }
+        // Create an iterator of other outputs and their positions and dimensions.
+        let other_outputs = self.context.output_heads.values().filter_map(|head| {
+            if head.name == output {
+                None
+            } else {
+                let Some(ref mode) = head.current_mode else {
+                    return None;
+                };
 
-        // Adjust to (0,0) baseline
-        offset = (i32::MAX, i32::MAX);
+                let Some(mode) = head.modes.get(mode) else {
+                    return None;
+                };
 
-        for (_name, x, y, ..) in &updates {
-            offset = (offset.0.min(*x), offset.1.min(*y));
-        }
+                let (width, height) = if head.transform.map_or(true, |wl_transform| {
+                    Transform::try_from(wl_transform).map_or(true, is_landscape)
+                }) {
+                    (mode.width, mode.height)
+                } else {
+                    (mode.height, mode.width)
+                };
 
-        for (_name, x, y, ..) in &mut updates {
-            *x -= offset.0;
-            *y -= offset.1;
-        }
+                Some(align::Rectangle {
+                    x: head.position_x as f32,
+                    y: head.position_y as f32,
+                    width: width as f32 / head.scale as f32,
+                    height: height as f32 / head.scale as f32,
+                })
+            }
+        });
+
+        // Align outputs such that there are no gaps.
+        align::display(active_output, other_outputs);
+
+        // Calculate how much to offset the position of each display to be aligned against (0,0)
+        let mut offset =
+            self.context
+                .output_heads
+                .values()
+                .fold((i32::MAX, i32::MAX), |offset, head| {
+                    let (x, y) = if output == head.name {
+                        (active_output.x as i32, active_output.y as i32)
+                    } else {
+                        (head.position_x, head.position_y)
+                    };
+
+                    (offset.0.min(x), offset.1.min(y))
+                });
+
+        // Reposition each display with that offset
+        let updates = self
+            .context
+            .output_heads
+            .values()
+            .map(|head| {
+                let (x, y) = if output == head.name {
+                    (active_output.x as i32, active_output.y as i32)
+                } else {
+                    (head.position_x, head.position_y)
+                };
+
+                (head.name.clone(), x - offset.0, y - offset.1)
+            })
+            .collect::<Vec<_>>();
+
+        // Adjust again to (0,0) baseline
+        offset = updates
+            .iter()
+            .fold((i32::MAX, i32::MAX), |offset, (_, x, y)| {
+                (offset.0.min(*x), offset.1.min(*y))
+            });
 
         // Apply new positions
-        for (name, x, y, ..) in updates {
+        for (name, mut x, mut y) in updates {
+            x -= offset.0;
+            y -= offset.1;
             set_position(&mut self.context, &name, x, y, test)?;
             let _res = self.context.dispatch(&mut self.event_queue).await;
             receive_messages(&mut self.message_rx).await?;
@@ -581,4 +652,11 @@ fn set_position(
     }
 
     Ok(())
+}
+
+fn is_landscape(transform: Transform) -> bool {
+    matches!(
+        transform,
+        Transform::Normal | Transform::Rotate180 | Transform::Flipped | Transform::Flipped180
+    )
 }
