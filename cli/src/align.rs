@@ -42,8 +42,8 @@ pub fn display<R: Rectangular>(new_region: &mut R, other_displays: impl Iterator
             new_region.set_y(
                 new_region
                     .y()
-                    .max(nearest_region.y() - new_region.height() + 8.0)
-                    .min(nearest_region.y() + nearest_region.height() - 8.0),
+                    .max(nearest_region.y() - new_region.height() + 4.0)
+                    .min(nearest_region.y() + nearest_region.height() - 4.0),
             );
         }
 
@@ -52,8 +52,8 @@ pub fn display<R: Rectangular>(new_region: &mut R, other_displays: impl Iterator
             new_region.set_x(
                 new_region
                     .x()
-                    .max(nearest_region.x() - new_region.width() + 8.0)
-                    .min(nearest_region.x() + nearest_region.width() - 8.0),
+                    .max(nearest_region.x() - new_region.width() + 4.0)
+                    .min(nearest_region.x() + nearest_region.width() - 4.0),
             );
         }
 
@@ -62,8 +62,8 @@ pub fn display<R: Rectangular>(new_region: &mut R, other_displays: impl Iterator
             new_region.set_y(
                 new_region
                     .y()
-                    .max(nearest_region.y() - new_region.height() + 8.0)
-                    .min(nearest_region.y() + nearest_region.height() - 8.0),
+                    .max(nearest_region.y() - new_region.height() + 4.0)
+                    .min(nearest_region.y() + nearest_region.height() - 4.0),
             );
         }
 
@@ -72,33 +72,33 @@ pub fn display<R: Rectangular>(new_region: &mut R, other_displays: impl Iterator
             new_region.set_x(
                 new_region
                     .x()
-                    .max(nearest_region.x() - new_region.width() + 8.0)
-                    .min(nearest_region.x() + nearest_region.width() - 8.0),
+                    .max(nearest_region.x() - new_region.width() + 4.0)
+                    .min(nearest_region.x() + nearest_region.width() - 4.0),
             );
         }
     }
 
     // Snap-align on x-axis when alignment is near.
-    if (new_region.x() - nearest_region.x()).abs() <= 8.0 {
+    if (new_region.x() - nearest_region.x()).abs() <= 4.0 {
         new_region.set_x(nearest_region.x());
     }
 
     // Snap-align on x-axis when alignment is near bottom edge.
     if ((new_region.x() + new_region.width()) - (nearest_region.x() + nearest_region.width())).abs()
-        <= 8.0
+        <= 4.0
     {
         new_region.set_x(nearest_region.x() + nearest_region.width() - new_region.width());
     }
 
     // Snap-align on y-axis when alignment is near.
-    if (new_region.y() - nearest_region.y()).abs() <= 8.0 {
+    if (new_region.y() - nearest_region.y()).abs() <= 4.0 {
         new_region.set_y(nearest_region.y());
     }
 
     // Snap-align on y-axis when alignment is near bottom edge.
     if ((new_region.y() + new_region.height()) - (nearest_region.y() + nearest_region.height()))
         .abs()
-        <= 8.0
+        <= 4.0
     {
         new_region.set_y(nearest_region.y() + nearest_region.height() - new_region.height());
     }

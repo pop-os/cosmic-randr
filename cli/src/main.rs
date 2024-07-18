@@ -243,19 +243,7 @@ impl App {
         set_mode(&mut self.context, &mode)?;
         let _res = self.context.dispatch(&mut self.event_queue).await;
         receive_messages(&mut self.message_rx).await?;
-
-        // Offset outputs in case of negative positioning.
-        if let Some((x, y)) = (mode.pos_x.is_some() || mode.pos_y.is_some()).then(|| {
-            (
-                mode.pos_x.unwrap_or_default(),
-                mode.pos_y.unwrap_or_default(),
-            )
-        }) {
-            self.set_offset_positions(&mode.output, x, y, mode.test)
-                .await?;
-        }
-
-        Ok(())
+        self.auto_correct_offsets(&mode.output, mode.test).await
     }
 
     async fn set_position(
@@ -265,20 +253,17 @@ impl App {
         y: i32,
         test: bool,
     ) -> Result<(), Box<dyn std::error::Error>> {
+        let _res = self.context.dispatch(&mut self.event_queue).await;
         set_position(&mut self.context, output, x, y, test)?;
         let _res = self.context.dispatch(&mut self.event_queue).await;
         receive_messages(&mut self.message_rx).await?;
-
-        self.set_offset_positions(output, x, y, test).await?;
-        Ok(())
+        self.auto_correct_offsets(output, test).await
     }
 
     // Offset outputs in case of negative positioning.
-    async fn set_offset_positions(
+    async fn auto_correct_offsets(
         &mut self,
         output: &str,
-        x: i32,
-        y: i32,
         test: bool,
     ) -> Result<(), Box<dyn std::error::Error>> {
         // Get the position and dimensions of the moved display.
@@ -305,8 +290,8 @@ impl App {
                 };
 
                 Some(align::Rectangle {
-                    x: x as f32,
-                    y: y as f32,
+                    x: head.position_x as f32,
+                    y: head.position_y as f32,
                     width: width as f32 / head.scale as f32,
                     height: height as f32 / head.scale as f32,
                 })
