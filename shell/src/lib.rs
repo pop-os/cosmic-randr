@@ -129,13 +129,12 @@ pub enum Error {
 #[allow(clippy::too_many_lines)]
 pub async fn list() -> Result<List, Error> {
     // Get a list of outputs from `cosmic-randr` in KDL format.
-    let stdout = tokio::process::Command::new("cosmic-randr")
-        .arg("list")
-        .arg("--kdl")
+    let stdout = std::process::Command::new("cosmic-randr")
+        .args(&["list", "--kdl"])
+        .stdin(std::process::Stdio::null())
         .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::null())
         .output()
-        .await
         .map_err(Error::Spawn)?
         .stdout;
 
