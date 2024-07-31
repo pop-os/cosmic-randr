@@ -8,5 +8,5 @@ edition = "2021"
 [dependencies]
 kdl = "4.6.0"
 slotmap = "1.0.7"
-thiserror = "1.0.51"
-tokio = { version = "1.35.1", features = [ "process" ]}
+thiserror = "1.0.63"
+tokio = { version = "1.39.2", features = [ "process" ]}
