@@ -3,5 +3,6 @@ members = ["cli", "lib", "shell"]
 resolver = "2"
 
 [profile.release]
+lto = "fat"
 opt-level = "s"
 # rustflags = ["-C", "inline-threshold=1"]
