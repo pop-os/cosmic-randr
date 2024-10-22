@@ -18,22 +18,33 @@ impl Dispatch<ZwlrOutputManagerV1, ()> for Context {
         _proxy: &ZwlrOutputManagerV1,
         event: <ZwlrOutputManagerV1 as Proxy>::Event,
         _data: &(),
-        _conn: &Connection,
+        conn: &Connection,
         handle: &QueueHandle<Self>,
     ) {
         match event {
             ZwlrOutputManagerEvent::Head { head } => {
                 if let Some(cosmic_extension) = state.cosmic_output_manager.as_ref() {
                     cosmic_extension.get_head(&head, handle, head.id());
+
+                    // Use `sync` callback to wait until `get_head` is processed and
+                    // we also have cosmic extension events.
+                    let callback = conn.display().sync(handle, ());
+                    state.cosmic_manager_sync_callback = Some(callback);
                 }
                 state.output_heads.insert(head.id(), OutputHead::new(head));
             }
 
             ZwlrOutputManagerEvent::Done { serial } => {
                 state.output_manager_serial = serial;
-                futures_lite::future::block_on(async {
-                    let _res = state.send(Message::ManagerDone).await;
-                });
+                if state.cosmic_manager_sync_callback.is_some() {
+                    // Potentally waiting for cosmic extension events after calling
+                    // `get_head`. Queue sending `ManagerDone` until sync callback.
+                    state.done_queued = true;
+                } else {
+                    futures_lite::future::block_on(async {
+                        let _res = state.send(Message::ManagerDone).await;
+                    });
+                }
             }
 
             ZwlrOutputManagerEvent::Finished => {
@@ -62,5 +73,33 @@ impl Dispatch<ZcosmicOutputManagerV1, ()> for Context {
         _conn: &Connection,
         _handle: &QueueHandle<Self>,
     ) {
+    }
+}
+
+use wayland_client::protocol::wl_callback::{self, WlCallback};
+
+impl Dispatch<WlCallback, ()> for Context {
+    fn event(
+        state: &mut Self,
+        proxy: &WlCallback,
+        event: wl_callback::Event,
+        _data: &(),
+        _conn: &Connection,
+        _handle: &QueueHandle<Self>,
+    ) {
+        match event {
+            wl_callback::Event::Done { callback_data: _ } => {
+                if state.cosmic_manager_sync_callback.as_ref() == Some(proxy) {
+                    state.cosmic_manager_sync_callback = None;
+                    if state.done_queued {
+                        futures_lite::future::block_on(async {
+                            let _res = state.send(Message::ManagerDone).await;
+                        });
+                        state.done_queued = false;
+                    }
+                }
+            }
+            _ => unreachable!(),
+        }
     }
 }
