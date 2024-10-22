@@ -208,35 +208,43 @@ impl App {
         Ok(())
     }
 
+    /// # Errors
+    ///
+    /// Returns error if the message receiver fails, dispach fails, or a configuration failed.
+    async fn receive_config_messages(&mut self) -> Result<(), Box<dyn std::error::Error>> {
+        loop {
+            while let Ok(message) = self.message_rx.try_recv() {
+                if config_message(Ok(message))? {
+                    return Ok(());
+                }
+            }
+
+            self.context.dispatch(&mut self.event_queue).await?;
+        }
+    }
+
     async fn enable(&mut self, output: &str) -> Result<(), Box<dyn std::error::Error>> {
-        let _res = self.dispatch_until_manager_done().await;
+        self.dispatch_until_manager_done().await?;
         enable(&mut self.context, output)?;
-        let _res = self.context.dispatch(&mut self.event_queue).await;
-        receive_messages(&mut self.message_rx).await?;
+        self.receive_config_messages().await?;
 
         Ok(())
     }
 
     async fn mirror(&mut self, output: &str, from: &str) -> Result<(), Box<dyn std::error::Error>> {
-        let _res = self.dispatch_until_manager_done().await;
+        self.dispatch_until_manager_done().await?;
         mirror(&mut self.context, output, from)?;
-        let _res = self.context.dispatch(&mut self.event_queue).await;
-        receive_messages(&mut self.message_rx).await?;
-
-        Ok(())
+        self.receive_config_messages().await
     }
 
     async fn disable(&mut self, output: &str) -> Result<(), Box<dyn std::error::Error>> {
-        let _res = self.dispatch_until_manager_done().await;
+        self.dispatch_until_manager_done().await?;
         disable(&mut self.context, output)?;
-        let _res = self.context.dispatch(&mut self.event_queue).await;
-        receive_messages(&mut self.message_rx).await?;
-
-        Ok(())
+        self.receive_config_messages().await
     }
 
     async fn list(&mut self, kdl: bool) -> Result<(), Box<dyn std::error::Error>> {
-        let _res = self.dispatch_until_manager_done().await;
+        self.dispatch_until_manager_done().await?;
         for head in self.context.output_heads.values_mut() {
             head.modes
                 .sort_unstable_by(|_, either, _, or| either.cmp(or));
@@ -252,10 +260,9 @@ impl App {
     }
 
     async fn mode(&mut self, mode: Mode) -> Result<(), Box<dyn std::error::Error>> {
-        let _res = self.dispatch_until_manager_done().await;
+        self.dispatch_until_manager_done().await?;
         set_mode(&mut self.context, &mode)?;
-        let _res = self.context.dispatch(&mut self.event_queue).await;
-        receive_messages(&mut self.message_rx).await?;
+        self.receive_config_messages().await?;
         self.auto_correct_offsets(&mode.output, mode.test).await
     }
 
@@ -266,10 +273,9 @@ impl App {
         y: i32,
         test: bool,
     ) -> Result<(), Box<dyn std::error::Error>> {
-        let _res = self.dispatch_until_manager_done().await;
+        self.dispatch_until_manager_done().await?;
         set_position(&mut self.context, output, x, y, test)?;
-        let _res = self.context.dispatch(&mut self.event_queue).await;
-        receive_messages(&mut self.message_rx).await?;
+        self.receive_config_messages().await?;
         self.auto_correct_offsets(output, test).await
     }
 
@@ -389,27 +395,11 @@ impl App {
             x -= offset.0;
             y -= offset.1;
             set_position(&mut self.context, &name, x, y, test)?;
-            let _res = self.context.dispatch(&mut self.event_queue).await;
-            receive_messages(&mut self.message_rx).await?;
+            self.receive_config_messages().await?;
         }
 
         Ok(())
     }
-}
-
-/// # Errors
-///
-/// Returns error if the message receiver fails, or a configuration failed.
-pub async fn receive_messages(
-    message_rx: &mut Receiver<Message>,
-) -> Result<(), Box<dyn std::error::Error>> {
-    config_message(message_rx.recv().await)?;
-
-    while let Ok(message) = message_rx.try_recv() {
-        config_message(Ok(message))?;
-    }
-
-    Ok(())
 }
 
 /// Handles output configuration messages.
