@@ -195,8 +195,21 @@ struct App {
 }
 
 impl App {
+    // Ignores any messages other than `ManagerDone`
+    async fn dispatch_until_manager_done(&mut self) -> Result<(), cosmic_randr::Error> {
+        'outer: loop {
+            while let Ok(msg) = self.message_rx.try_recv() {
+                if matches!(msg, Message::ManagerDone) {
+                    break 'outer;
+                }
+            }
+            self.context.dispatch(&mut self.event_queue).await?;
+        }
+        Ok(())
+    }
+
     async fn enable(&mut self, output: &str) -> Result<(), Box<dyn std::error::Error>> {
-        let _res = self.context.dispatch(&mut self.event_queue).await;
+        let _res = self.dispatch_until_manager_done().await;
         enable(&mut self.context, output)?;
         let _res = self.context.dispatch(&mut self.event_queue).await;
         receive_messages(&mut self.message_rx).await?;
@@ -205,7 +218,7 @@ impl App {
     }
 
     async fn mirror(&mut self, output: &str, from: &str) -> Result<(), Box<dyn std::error::Error>> {
-        let _res = self.context.dispatch(&mut self.event_queue).await;
+        let _res = self.dispatch_until_manager_done().await;
         mirror(&mut self.context, output, from)?;
         let _res = self.context.dispatch(&mut self.event_queue).await;
         receive_messages(&mut self.message_rx).await?;
@@ -214,7 +227,7 @@ impl App {
     }
 
     async fn disable(&mut self, output: &str) -> Result<(), Box<dyn std::error::Error>> {
-        let _res = self.context.dispatch(&mut self.event_queue).await;
+        let _res = self.dispatch_until_manager_done().await;
         disable(&mut self.context, output)?;
         let _res = self.context.dispatch(&mut self.event_queue).await;
         receive_messages(&mut self.message_rx).await?;
@@ -223,7 +236,7 @@ impl App {
     }
 
     async fn list(&mut self, kdl: bool) -> Result<(), Box<dyn std::error::Error>> {
-        let _res = self.context.dispatch(&mut self.event_queue).await;
+        let _res = self.dispatch_until_manager_done().await;
         for head in self.context.output_heads.values_mut() {
             head.modes
                 .sort_unstable_by(|_, either, _, or| either.cmp(or));
@@ -239,7 +252,7 @@ impl App {
     }
 
     async fn mode(&mut self, mode: Mode) -> Result<(), Box<dyn std::error::Error>> {
-        let _res = self.context.dispatch(&mut self.event_queue).await;
+        let _res = self.dispatch_until_manager_done().await;
         set_mode(&mut self.context, &mode)?;
         let _res = self.context.dispatch(&mut self.event_queue).await;
         receive_messages(&mut self.message_rx).await?;
@@ -253,7 +266,7 @@ impl App {
         y: i32,
         test: bool,
     ) -> Result<(), Box<dyn std::error::Error>> {
-        let _res = self.context.dispatch(&mut self.event_queue).await;
+        let _res = self.dispatch_until_manager_done().await;
         set_position(&mut self.context, output, x, y, test)?;
         let _res = self.context.dispatch(&mut self.event_queue).await;
         receive_messages(&mut self.message_rx).await?;
