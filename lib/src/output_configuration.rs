@@ -10,7 +10,7 @@ use wayland_protocols_wlr::output_management::v1::client::zwlr_output_configurat
 impl Dispatch<ZwlrOutputConfigurationV1, ()> for Context {
     fn event(
         state: &mut Self,
-        _proxy: &ZwlrOutputConfigurationV1,
+        proxy: &ZwlrOutputConfigurationV1,
         event: <ZwlrOutputConfigurationV1 as Proxy>::Event,
         _data: &(),
         _conn: &Connection,
@@ -20,14 +20,17 @@ impl Dispatch<ZwlrOutputConfigurationV1, ()> for Context {
             match event {
                 Event::Succeeded => {
                     let _res = state.send(Message::ConfigurationSucceeded).await;
+                    proxy.destroy();
                 }
                 Event::Failed => {
                     let _res = state.send(Message::ConfigurationFailed).await;
+                    proxy.destroy();
                 }
                 Event::Cancelled => {
                     let _res = state.send(Message::ConfigurationCancelled).await;
+                    proxy.destroy();
                 }
-                _ => tracing::debug!(?event, "unknown event"),
+                _ => unreachable!(),
             }
         });
     }
