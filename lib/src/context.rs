@@ -9,7 +9,9 @@ use cosmic_protocols::output_management::v1::client::zcosmic_output_manager_v1::
 use std::collections::HashMap;
 use std::fmt;
 use tachyonix::Sender;
-use wayland_client::protocol::{wl_output::Transform, wl_registry::WlRegistry};
+use wayland_client::protocol::{
+    wl_callback::WlCallback, wl_output::Transform, wl_registry::WlRegistry,
+};
 use wayland_client::{backend::ObjectId, Connection, Proxy, QueueHandle};
 use wayland_client::{DispatchError, EventQueue};
 use wayland_protocols_wlr::output_management::v1::client::zwlr_output_configuration_head_v1::ZwlrOutputConfigurationHeadV1;
@@ -30,6 +32,9 @@ pub struct Context {
 
     pub output_heads: HashMap<ObjectId, OutputHead>,
     pub wl_registry: WlRegistry,
+
+    pub cosmic_manager_sync_callback: Option<WlCallback>,
+    pub done_queued: bool,
 }
 
 #[derive(Debug)]
@@ -337,6 +342,8 @@ impl Context {
             output_heads: Default::default(),
             sender,
             wl_registry,
+            cosmic_manager_sync_callback: None,
+            done_queued: false,
         };
 
         event_queue.roundtrip(&mut context)?;
