@@ -181,7 +181,7 @@ impl Configuration {
         Ok(())
     }
 
-    pub fn test(mut self) {
+    fn configure_remaining_heads(&mut self) {
         let known_heads = self.known_heads.clone();
         let configured_heads = self.configured_heads.clone();
         for output in known_heads
@@ -189,27 +189,24 @@ impl Configuration {
             .filter(|output| !configured_heads.iter().any(|name| *name == output.name))
         {
             if output.enabled {
-                self.enable_head(&output.name, None).unwrap();
+                if let Some(from) = output.mirroring.as_ref() {
+                    self.mirror_head(&output.name, from, None).unwrap();
+                } else {
+                    self.enable_head(&output.name, None).unwrap();
+                }
             } else {
                 self.disable_head(&output.name).unwrap();
             }
         }
+    }
+
+    pub fn test(mut self) {
+        self.configure_remaining_heads();
         self.obj.test();
     }
 
     pub fn apply(mut self) {
-        let known_heads = self.known_heads.clone();
-        let configured_heads = self.configured_heads.clone();
-        for output in known_heads
-            .iter()
-            .filter(|output| !configured_heads.iter().any(|name| *name == output.name))
-        {
-            if output.enabled {
-                self.enable_head(&output.name, None).unwrap();
-            } else {
-                self.disable_head(&output.name).unwrap();
-            }
-        }
+        self.configure_remaining_heads();
         self.obj.apply();
     }
 
