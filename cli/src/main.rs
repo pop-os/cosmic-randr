@@ -332,6 +332,10 @@ impl App {
                     return None;
                 };
 
+                if !head.enabled || head.mirroring.is_some() {
+                    return None;
+                }
+
                 let (width, height) = if head.transform.map_or(true, |wl_transform| {
                     Transform::try_from(wl_transform).map_or(true, is_landscape)
                 }) {
@@ -357,6 +361,7 @@ impl App {
             self.context
                 .output_heads
                 .values()
+                .filter(|head| head.enabled && head.mirroring.is_none())
                 .fold((i32::MAX, i32::MAX), |offset, head| {
                     let (x, y) = if output == head.name {
                         (active_output.x as i32, active_output.y as i32)
@@ -372,6 +377,7 @@ impl App {
             .context
             .output_heads
             .values()
+            .filter(|head| head.enabled && head.mirroring.is_none())
             .map(|head| {
                 let (x, y) = if output == head.name {
                     (active_output.x as i32, active_output.y as i32)
