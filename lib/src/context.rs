@@ -16,7 +16,9 @@ use wayland_client::{backend::ObjectId, Connection, Proxy, QueueHandle};
 use wayland_client::{DispatchError, EventQueue};
 use wayland_protocols_wlr::output_management::v1::client::zwlr_output_configuration_head_v1::ZwlrOutputConfigurationHeadV1;
 use wayland_protocols_wlr::output_management::v1::client::zwlr_output_configuration_v1::ZwlrOutputConfigurationV1;
-use wayland_protocols_wlr::output_management::v1::client::zwlr_output_head_v1::ZwlrOutputHeadV1;
+use wayland_protocols_wlr::output_management::v1::client::zwlr_output_head_v1::{
+    AdaptiveSyncState, ZwlrOutputHeadV1,
+};
 use wayland_protocols_wlr::output_management::v1::client::zwlr_output_manager_v1::ZwlrOutputManagerV1;
 
 #[derive(Debug)]
@@ -54,6 +56,8 @@ pub struct HeadConfiguration {
     pub size: Option<(u32, u32)>,
     /// Specifies the refresh rate to apply to the output.
     pub refresh: Option<f32>,
+    /// Specifies the adaptive_sync mode to apply to the output.
+    pub adaptive_sync: Option<bool>,
     /// Position the output within this x pixel coordinate.
     pub pos: Option<(i32, i32)>,
     /// Changes the dimensions of the output picture.
@@ -248,6 +252,14 @@ fn send_mode_to_config_head(
             }
         })
     };
+
+    if let Some(vrr) = args.adaptive_sync {
+        head_config.set_adaptive_sync(if vrr {
+            AdaptiveSyncState::Enabled
+        } else {
+            AdaptiveSyncState::Disabled
+        });
+    }
 
     if let Some(refresh) = args.refresh {
         #[allow(clippy::cast_possible_truncation)]

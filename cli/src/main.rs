@@ -33,6 +33,9 @@ struct Mode {
     /// Specifies the refresh rate to apply to the output.
     #[arg(long)]
     refresh: Option<f32>,
+    /// Specfies the adaptive sync mode to apply to the output.
+    #[arg(long)]
+    adaptive_sync: Option<bool>,
     /// Position the output within this x pixel coordinate.
     #[arg(long, allow_hyphen_values(true))]
     pos_x: Option<i32>,
@@ -55,6 +58,7 @@ impl Mode {
         HeadConfiguration {
             size: Some((self.width as u32, self.height as u32)),
             refresh: self.refresh,
+            adaptive_sync: self.adaptive_sync,
             pos: (self.pos_x.is_some() || self.pos_y.is_some()).then(|| {
                 (
                     self.pos_x.unwrap_or_default(),
@@ -357,20 +361,20 @@ impl App {
         align::display(active_output, other_outputs);
 
         // Calculate how much to offset the position of each display to be aligned against (0,0)
-        let mut offset =
-            self.context
-                .output_heads
-                .values()
-                .filter(|head| head.enabled && head.mirroring.is_none())
-                .fold((i32::MAX, i32::MAX), |offset, head| {
-                    let (x, y) = if output == head.name {
-                        (active_output.x as i32, active_output.y as i32)
-                    } else {
-                        (head.position_x, head.position_y)
-                    };
+        let mut offset = self
+            .context
+            .output_heads
+            .values()
+            .filter(|head| head.enabled && head.mirroring.is_none())
+            .fold((i32::MAX, i32::MAX), |offset, head| {
+                let (x, y) = if output == head.name {
+                    (active_output.x as i32, active_output.y as i32)
+                } else {
+                    (head.position_x, head.position_y)
+                };
 
-                    (offset.0.min(x), offset.1.min(y))
-                });
+                (offset.0.min(x), offset.1.min(y))
+            });
 
         // Reposition each display with that offset
         let updates = self
@@ -611,7 +615,7 @@ fn set_mode(context: &mut Context, args: &Mode) -> Result<(), Box<dyn std::error
     if let Some(mirroring_from) = mirroring.filter(|_| head_config.pos.is_none()) {
         config.mirror_head(&args.output, &mirroring_from, Some(head_config))?;
     } else {
-        config.enable_head(&args.output, Some(args.to_head_config()))?;
+        config.enable_head(&args.output, Some(head_config))?;
     }
 
     if args.test {
