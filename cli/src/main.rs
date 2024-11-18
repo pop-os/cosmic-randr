@@ -6,7 +6,7 @@ pub mod align;
 use clap::{Parser, ValueEnum};
 use cosmic_randr::context::HeadConfiguration;
 use cosmic_randr::Message;
-use cosmic_randr::{AdaptiveSyncState, Context};
+use cosmic_randr::{AdaptiveSyncAvailability, AdaptiveSyncStateExt, Context};
 use nu_ansi_term::{Color, Style};
 use std::fmt::{Display, Write as FmtWrite};
 use std::io::Write;
@@ -34,8 +34,8 @@ struct Mode {
     #[arg(long)]
     refresh: Option<f32>,
     /// Specfies the adaptive sync mode to apply to the output.
-    #[arg(long)]
-    adaptive_sync: Option<bool>,
+    #[arg(long, value_enum)]
+    adaptive_sync: Option<AdaptiveSync>,
     /// Position the output within this x pixel coordinate.
     #[arg(long, allow_hyphen_values(true))]
     pos_x: Option<i32>,
@@ -58,7 +58,9 @@ impl Mode {
         HeadConfiguration {
             size: Some((self.width as u32, self.height as u32)),
             refresh: self.refresh,
-            adaptive_sync: self.adaptive_sync,
+            adaptive_sync: self
+                .adaptive_sync
+                .map(|adaptive_sync| adaptive_sync.adaptive_sync_state_ext()),
             pos: (self.pos_x.is_some() || self.pos_y.is_some()).then(|| {
                 (
                     self.pos_x.unwrap_or_default(),
@@ -159,6 +161,50 @@ impl Transform {
             Transform::Flipped90 => WlTransform::Flipped90,
             Transform::Flipped180 => WlTransform::Flipped180,
             Transform::Flipped270 => WlTransform::Flipped270,
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq, ValueEnum)]
+pub enum AdaptiveSync {
+    #[value(name = "true")]
+    Always,
+    #[value(name = "automatic")]
+    Automatic,
+    #[value(name = "false")]
+    Disabled,
+}
+
+impl Display for AdaptiveSync {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(match self {
+            AdaptiveSync::Always => "true",
+            AdaptiveSync::Automatic => "automatic",
+            AdaptiveSync::Disabled => "false",
+        })
+    }
+}
+
+impl TryFrom<AdaptiveSyncStateExt> for AdaptiveSync {
+    type Error = &'static str;
+
+    fn try_from(value: AdaptiveSyncStateExt) -> Result<Self, Self::Error> {
+        Ok(match value {
+            AdaptiveSyncStateExt::Always => AdaptiveSync::Always,
+            AdaptiveSyncStateExt::Automatic => AdaptiveSync::Automatic,
+            AdaptiveSyncStateExt::Disabled => AdaptiveSync::Disabled,
+            _ => return Err("unknown adaptive_sync_state_ext variant"),
+        })
+    }
+}
+
+impl AdaptiveSync {
+    #[must_use]
+    pub fn adaptive_sync_state_ext(self) -> AdaptiveSyncStateExt {
+        match self {
+            AdaptiveSync::Always => AdaptiveSyncStateExt::Always,
+            AdaptiveSync::Automatic => AdaptiveSyncStateExt::Automatic,
+            AdaptiveSync::Disabled => AdaptiveSyncStateExt::Disabled,
         }
     }
 }
@@ -495,13 +541,26 @@ fn list(context: &Context) {
                     (Color::Yellow.bold().paint("\n  Transform: ")) (transform)
                 }
             }
+            if let Some(available) = head.adaptive_sync_support {
+                (Color::Yellow.bold().paint("\n  Adaptive Sync Support: "))
+                (match available {
+                    AdaptiveSyncAvailability::Supported | AdaptiveSyncAvailability::RequiresModeset => Color::Green.paint("true"),
+                    _ => Color::Red.paint("false"),
+                })
+            }
             if let Some(sync) = head.adaptive_sync {
                 (Color::Yellow.bold().paint("\n  Adaptive Sync: "))
-                if let AdaptiveSyncState::Enabled = sync {
-                    (Color::Green.paint("true\n"))
-                } else {
-                    (Color::Red.paint("false\n"))
-                }
+                (match sync {
+                    AdaptiveSyncStateExt::Always => {
+                        Color::Green.paint("true\n")
+                    },
+                    AdaptiveSyncStateExt::Automatic => {
+                        Color::Green.paint("automatic\n")
+                    },
+                    _ => {
+                        Color::Red.paint("false\n")
+                    }
+                })
             }
             (Color::Yellow.bold().paint("\n  Modes:"))
         );
@@ -560,13 +619,23 @@ fn list_kdl(context: &Context) {
                     "  transform \"" (transform) "\"\n"
                 }
             }
+            if let Some(available) = head.adaptive_sync_support {
+                "  adaptive_sync_support \""
+                (match available {
+                    AdaptiveSyncAvailability::Supported => "true",
+                    AdaptiveSyncAvailability::RequiresModeset => "requires_modeset",
+                    _ => "false",
+                })
+                "\"\n"
+            }
             if let Some(sync) = head.adaptive_sync {
-                "  adaptive_sync "
-                if let AdaptiveSyncState::Enabled = sync {
-                    "true\n"
-                } else {
-                    "false\n"
-                }
+                "  adaptive_sync \""
+                (match sync {
+                    AdaptiveSyncStateExt::Always => "true",
+                    AdaptiveSyncStateExt::Automatic => "automatic",
+                    _ => "false",
+                })
+                "\"\n"
             }
             if !head.serial_number.is_empty() {
                 "  serial_number=\"" (head.serial_number) "\"\n"

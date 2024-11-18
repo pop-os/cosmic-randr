@@ -5,6 +5,8 @@ use std::sync::Mutex;
 
 use crate::{Context, OutputMode};
 
+use cosmic_protocols::output_management::v1::client::zcosmic_output_head_v1::AdaptiveSyncAvailability;
+use cosmic_protocols::output_management::v1::client::zcosmic_output_head_v1::AdaptiveSyncStateExt;
 use cosmic_protocols::output_management::v1::client::zcosmic_output_head_v1::Event as ZcosmicOutputHeadEvent;
 use cosmic_protocols::output_management::v1::client::zcosmic_output_head_v1::ZcosmicOutputHeadV1;
 use indexmap::IndexMap;
@@ -21,7 +23,8 @@ use wayland_protocols_wlr::output_management::v1::client::zwlr_output_mode_v1::Z
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct OutputHead {
-    pub adaptive_sync: Option<AdaptiveSyncState>,
+    pub adaptive_sync: Option<AdaptiveSyncStateExt>,
+    pub adaptive_sync_support: Option<AdaptiveSyncAvailability>,
     pub current_mode: Option<ObjectId>,
     pub description: String,
     pub enabled: bool,
@@ -116,7 +119,11 @@ impl Dispatch<ZwlrOutputHeadV1, ()> for Context {
             }
 
             ZwlrOutputHeadEvent::AdaptiveSync { state } => {
-                head.adaptive_sync = state.into_result().ok();
+                head.adaptive_sync = match state.into_result().ok() {
+                    Some(AdaptiveSyncState::Enabled) => Some(AdaptiveSyncStateExt::Always),
+                    Some(AdaptiveSyncState::Disabled) => Some(AdaptiveSyncStateExt::Disabled),
+                    Some(_) | None => None,
+                };
             }
 
             _ => tracing::debug!(?event, "unknown event"),
@@ -149,6 +156,16 @@ impl Dispatch<ZcosmicOutputHeadV1, ObjectId> for Context {
             ZcosmicOutputHeadEvent::Mirroring { name } => {
                 head.mirroring = name;
             }
+            ZcosmicOutputHeadEvent::AdaptiveSyncAvailable { available } => {
+                head.adaptive_sync_support = Some(
+                    available
+                        .into_result()
+                        .unwrap_or(AdaptiveSyncAvailability::Unsupported),
+                );
+            }
+            ZcosmicOutputHeadEvent::AdaptiveSyncExt { state } => {
+                head.adaptive_sync = state.into_result().ok();
+            }
             _ => tracing::debug!(?event, "unknown event"),
         }
     }
@@ -159,6 +176,7 @@ impl OutputHead {
     pub fn new(wlr_head: ZwlrOutputHeadV1) -> Self {
         Self {
             adaptive_sync: None,
+            adaptive_sync_support: None,
             current_mode: None,
             description: String::new(),
             enabled: false,
