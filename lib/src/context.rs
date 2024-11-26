@@ -3,8 +3,11 @@
 
 use crate::output_head::OutputHead;
 use crate::{Error, Message};
-use cosmic_protocols::output_management::v1::client::zcosmic_output_configuration_head_v1::ZcosmicOutputConfigurationHeadV1;
+use cosmic_protocols::output_management::v1::client::zcosmic_output_configuration_head_v1::{
+    self, ZcosmicOutputConfigurationHeadV1,
+};
 use cosmic_protocols::output_management::v1::client::zcosmic_output_configuration_v1::ZcosmicOutputConfigurationV1;
+use cosmic_protocols::output_management::v1::client::zcosmic_output_head_v1::AdaptiveSyncStateExt;
 use cosmic_protocols::output_management::v1::client::zcosmic_output_manager_v1::ZcosmicOutputManagerV1;
 use std::collections::HashMap;
 use std::fmt;
@@ -16,7 +19,9 @@ use wayland_client::{backend::ObjectId, Connection, Proxy, QueueHandle};
 use wayland_client::{DispatchError, EventQueue};
 use wayland_protocols_wlr::output_management::v1::client::zwlr_output_configuration_head_v1::ZwlrOutputConfigurationHeadV1;
 use wayland_protocols_wlr::output_management::v1::client::zwlr_output_configuration_v1::ZwlrOutputConfigurationV1;
-use wayland_protocols_wlr::output_management::v1::client::zwlr_output_head_v1::ZwlrOutputHeadV1;
+use wayland_protocols_wlr::output_management::v1::client::zwlr_output_head_v1::{
+    AdaptiveSyncState, ZwlrOutputHeadV1,
+};
 use wayland_protocols_wlr::output_management::v1::client::zwlr_output_manager_v1::ZwlrOutputManagerV1;
 
 #[derive(Debug)]
@@ -54,6 +59,8 @@ pub struct HeadConfiguration {
     pub size: Option<(u32, u32)>,
     /// Specifies the refresh rate to apply to the output.
     pub refresh: Option<f32>,
+    /// Specifies the adaptive_sync mode to apply to the output.
+    pub adaptive_sync: Option<AdaptiveSyncStateExt>,
     /// Position the output within this x pixel coordinate.
     pub pos: Option<(i32, i32)>,
     /// Changes the dimensions of the output picture.
@@ -70,6 +77,7 @@ pub enum ConfigurationError {
     NoCosmicExtension,
     PositionForMirroredOutput,
     MirroringItself,
+    UnsupportedVrrState,
 }
 
 impl fmt::Display for ConfigurationError {
@@ -81,6 +89,9 @@ impl fmt::Display for ConfigurationError {
             Self::NoCosmicExtension => f.write_str("Mirroring isn't available outside COSMIC"),
             Self::PositionForMirroredOutput => f.write_str("You cannot position a mirrored output"),
             Self::MirroringItself => f.write_str("Output mirroring itself"),
+            Self::UnsupportedVrrState => {
+                f.write_str("Automatic VRR state management isn't available outside COSMIC")
+            }
         }
     }
 }
@@ -222,7 +233,7 @@ fn send_mode_to_config_head(
     args: HeadConfiguration,
 ) -> Result<(), ConfigurationError> {
     if let Some(scale) = args.scale {
-        if let Some(cosmic_obj) = cosmic_head_config {
+        if let Some(cosmic_obj) = cosmic_head_config.as_ref() {
             cosmic_obj.set_scale_1000((scale * 1000.0) as i32);
         } else {
             head_config.set_scale(scale);
@@ -248,6 +259,23 @@ fn send_mode_to_config_head(
             }
         })
     };
+
+    if let Some(vrr) = args.adaptive_sync {
+        if let Some(cosmic_obj) = cosmic_head_config.as_ref().filter(|obj| {
+            obj.version() >= zcosmic_output_configuration_head_v1::REQ_SET_ADAPTIVE_SYNC_EXT_SINCE
+        }) {
+            cosmic_obj.set_adaptive_sync_ext(vrr);
+        } else {
+            head_config.set_adaptive_sync(match vrr {
+                AdaptiveSyncStateExt::Always => AdaptiveSyncState::Enabled,
+                AdaptiveSyncStateExt::Disabled => AdaptiveSyncState::Disabled,
+                AdaptiveSyncStateExt::Automatic => {
+                    return Err(ConfigurationError::UnsupportedVrrState)
+                }
+                _ => panic!("Unknown AdaptiveSyncStatExt variant"),
+            });
+        }
+    }
 
     if let Some(refresh) = args.refresh {
         #[allow(clippy::cast_possible_truncation)]

@@ -12,7 +12,9 @@ pub mod output_manager;
 pub mod output_mode;
 pub use output_mode::OutputMode;
 
-pub use wayland_protocols_wlr::output_management::v1::client::zwlr_output_head_v1::AdaptiveSyncState;
+pub use cosmic_protocols::output_management::v1::client::zcosmic_output_head_v1::{
+    AdaptiveSyncAvailability, AdaptiveSyncStateExt,
+};
 pub mod wl_registry;
 
 use tachyonix::Sender;

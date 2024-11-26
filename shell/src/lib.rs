@@ -50,6 +50,8 @@ pub struct Output {
     pub transform: Option<Transform>,
     pub modes: Vec<ModeKey>,
     pub current: Option<ModeKey>,
+    pub adaptive_sync: Option<AdaptiveSyncState>,
+    pub adaptive_sync_availability: Option<AdaptiveSyncAvailability>,
 }
 
 impl Output {
@@ -67,6 +69,8 @@ impl Output {
             transform: None,
             modes: Vec::new(),
             current: None,
+            adaptive_sync: None,
+            adaptive_sync_availability: None,
         }
     }
 }
@@ -112,6 +116,66 @@ impl TryFrom<&str> for Transform {
             "flipped180" => Transform::Flipped180,
             "flipped270" => Transform::Flipped270,
             _ => return Err("unknown transform variant"),
+        })
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum AdaptiveSyncState {
+    Always,
+    Auto,
+    Disabled,
+}
+
+impl Display for AdaptiveSyncState {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(match self {
+            AdaptiveSyncState::Always => "true",
+            AdaptiveSyncState::Auto => "automatic",
+            AdaptiveSyncState::Disabled => "false",
+        })
+    }
+}
+
+impl TryFrom<&str> for AdaptiveSyncState {
+    type Error = &'static str;
+
+    fn try_from(value: &str) -> Result<Self, Self::Error> {
+        Ok(match value {
+            "true" => AdaptiveSyncState::Always,
+            "automatic" => AdaptiveSyncState::Auto,
+            "false" => AdaptiveSyncState::Disabled,
+            _ => return Err("unknown adaptive_sync state variant"),
+        })
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum AdaptiveSyncAvailability {
+    Supported,
+    RequiresModeset,
+    Unsupported,
+}
+
+impl Display for AdaptiveSyncAvailability {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(match self {
+            AdaptiveSyncAvailability::Supported => "true",
+            AdaptiveSyncAvailability::RequiresModeset => "requires_modeset",
+            AdaptiveSyncAvailability::Unsupported => "false",
+        })
+    }
+}
+
+impl TryFrom<&str> for AdaptiveSyncAvailability {
+    type Error = &'static str;
+
+    fn try_from(value: &str) -> Result<Self, Self::Error> {
+        Ok(match value {
+            "true" => AdaptiveSyncAvailability::Supported,
+            "requires_modeset" => AdaptiveSyncAvailability::RequiresModeset,
+            "false" => AdaptiveSyncAvailability::Unsupported,
+            _ => return Err("unknown adaptive_sync availability variant"),
         })
     }
 }
@@ -241,6 +305,23 @@ pub async fn list() -> Result<List, Error> {
                     if let Some(entry) = node.entries().first() {
                         if let Some(string) = entry.value().as_string() {
                             output.transform = Transform::try_from(string).ok();
+                        }
+                    }
+                }
+
+                "adaptive_sync" => {
+                    if let Some(entry) = node.entries().first() {
+                        if let Some(string) = entry.value().as_string() {
+                            output.adaptive_sync = AdaptiveSyncState::try_from(string).ok();
+                        }
+                    }
+                }
+
+                "adaptive_sync_support" => {
+                    if let Some(entry) = node.entries().first() {
+                        if let Some(string) = entry.value().as_string() {
+                            output.adaptive_sync_availability =
+                                AdaptiveSyncAvailability::try_from(string).ok();
                         }
                     }
                 }
