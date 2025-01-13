@@ -6,12 +6,12 @@ license = "MPL-2.0"
 edition = "2021"
 
 [dependencies]
-futures-lite = "2.3.0"
-tachyonix = "0.3.0"
-thiserror = "1.0.63"
-tokio = { version = "1.39.2", features = ["net"] }
-tracing = "0.1.40"
-wayland-client = "0.31.5"
-wayland-protocols-wlr = { version = "0.3.3", features = [ "client", "wayland-client" ] }
+futures-lite = "2.6.0"
+tachyonix = "0.3.1"
+thiserror = "1.0.69"
+tokio = { version = "1.43.0", features = ["net"] }
+tracing = "0.1.41"
+wayland-client = "0.31.7"
+wayland-protocols-wlr = { version = "0.3.5", features = [ "client", "wayland-client" ] }
 cosmic-protocols = { git = "https://github.com/pop-os/cosmic-protocols.git" }
-indexmap = "2.2.6"
+indexmap = "2.7.0"
