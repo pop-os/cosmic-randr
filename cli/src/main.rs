@@ -247,14 +247,30 @@ struct App {
 impl App {
     // Ignores any messages other than `ManagerDone`
     async fn dispatch_until_manager_done(&mut self) -> Result<(), cosmic_randr::Error> {
-        'outer: loop {
-            while let Ok(msg) = self.message_rx.try_recv() {
-                if matches!(msg, Message::ManagerDone) {
-                    break 'outer;
+        loop {
+            let watcher = async {
+                while let Ok(msg) = self.message_rx.recv().await {
+                    if matches!(msg, Message::ManagerDone) {
+                        return true;
+                    }
                 }
-            }
-            self.context.dispatch(&mut self.event_queue).await?;
+
+                false
+            };
+
+            tokio::select! {
+                is_done = watcher => {
+                    if is_done {
+                        break
+                    }
+                },
+
+                result = self.context.dispatch(&mut self.event_queue) => {
+                    result?;
+                }
+            };
         }
+
         Ok(())
     }
 
