@@ -194,7 +194,7 @@ pub enum Error {
 pub async fn list() -> Result<List, Error> {
     // Get a list of outputs from `cosmic-randr` in KDL format.
     let stdout = std::process::Command::new("cosmic-randr")
-        .args(&["list", "--kdl"])
+        .args(["list", "--kdl"])
         .stdin(std::process::Stdio::null())
         .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::null())

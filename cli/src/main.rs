@@ -610,7 +610,7 @@ fn list_kdl(context: &Context) {
         #[allow(clippy::ignored_unit_patterns)]
         let _res = fomat_macros::witeln!(
             &mut output,
-            "output \"" (head.name) "\" enabled=" (head.enabled) " {\n"
+            "output \"" (head.name) "\" enabled=#" (head.enabled) " {\n"
             "  description"
             if !head.make.is_empty() { " make=\"" (head.make) "\"" }
             " model=\"" (head.model) "\"\n"
@@ -657,12 +657,12 @@ fn list_kdl(context: &Context) {
                 mode.height,
                 mode.refresh,
                 if head.current_mode.as_ref() == Some(&mode.wlr_mode.id()) {
-                    " current=true"
+                    " current=#true"
                 } else {
                     ""
                 },
                 if mode.preferred {
-                    " preferred=true"
+                    " preferred=#true"
                 } else {
                     ""
                 },
