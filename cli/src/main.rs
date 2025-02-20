@@ -358,13 +358,8 @@ impl App {
             .values()
             .find(|head| head.name == output)
             .and_then(|head| {
-                let Some(ref mode) = head.current_mode else {
-                    return None;
-                };
-
-                let Some(mode) = head.modes.get(mode) else {
-                    return None;
-                };
+                let mode = head.current_mode.as_ref()?;
+                let mode = head.modes.get(mode)?;
 
                 let (width, height) = if head.transform.map_or(true, |wl_transform| {
                     Transform::try_from(wl_transform).map_or(true, is_landscape)
@@ -390,13 +385,8 @@ impl App {
             if head.name == output {
                 None
             } else {
-                let Some(ref mode) = head.current_mode else {
-                    return None;
-                };
-
-                let Some(mode) = head.modes.get(mode) else {
-                    return None;
-                };
+                let mode = head.current_mode.as_ref()?;
+                let mode = head.modes.get(mode)?;
 
                 if !head.enabled || head.mirroring.is_some() {
                     return None;

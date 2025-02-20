@@ -276,8 +276,8 @@ pub async fn list() -> Result<List, Error> {
                 "physical" => {
                     if let [width, height, ..] = node.entries() {
                         output.physical = (
-                            width.value().as_i64().unwrap_or_default() as u32,
-                            height.value().as_i64().unwrap_or_default() as u32,
+                            width.value().as_integer().unwrap_or_default() as u32,
+                            height.value().as_integer().unwrap_or_default() as u32,
                         );
                     }
                 }
@@ -286,15 +286,15 @@ pub async fn list() -> Result<List, Error> {
                 "position" => {
                     if let [x_pos, y_pos, ..] = node.entries() {
                         output.position = (
-                            x_pos.value().as_i64().unwrap_or_default() as i32,
-                            y_pos.value().as_i64().unwrap_or_default() as i32,
+                            x_pos.value().as_integer().unwrap_or_default() as i32,
+                            y_pos.value().as_integer().unwrap_or_default() as i32,
                         );
                     }
                 }
 
                 "scale" => {
                     if let Some(entry) = node.entries().first() {
-                        if let Some(scale) = entry.value().as_f64() {
+                        if let Some(scale) = entry.value().as_float() {
                             output.scale = scale;
                         }
                     }
@@ -339,12 +339,12 @@ pub async fn list() -> Result<List, Error> {
 
                             if let [width, height, refresh, ..] = node.entries() {
                                 mode.size = (
-                                    width.value().as_i64().unwrap_or_default() as u32,
-                                    height.value().as_i64().unwrap_or_default() as u32,
+                                    width.value().as_integer().unwrap_or_default() as u32,
+                                    height.value().as_integer().unwrap_or_default() as u32,
                                 );
 
                                 mode.refresh_rate =
-                                    refresh.value().as_i64().unwrap_or_default() as u32;
+                                    refresh.value().as_integer().unwrap_or_default() as u32;
                             };
 
                             for entry in node.entries().iter().skip(3) {

@@ -6,7 +6,7 @@ license = "MPL-2.0"
 edition = "2021"
 
 [dependencies]
-kdl = "4.7.1"
+kdl = "6.3.4"
 slotmap = "1.0.7"
-thiserror = "1.0.69"
+thiserror = "2.0.11"
 tokio = { version = "1.43.0", features = [ "process" ]}
