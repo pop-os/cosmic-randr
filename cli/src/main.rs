@@ -102,6 +102,17 @@ enum Commands {
         #[arg(long)]
         test: bool,
     },
+
+    /// Xwayland compatibility options
+    #[command(arg_required_else_help = true)]
+    Xwayland {
+        /// Set output as primary
+        #[arg(long, value_name = "OUTPUT")]
+        primary: Option<String>,
+        /// Unset primary output
+        #[arg(long, conflicts_with = "primary")]
+        no_primary: bool,
+    },
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, PartialOrd, Ord, ValueEnum)]
@@ -235,6 +246,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         Commands::Mode(mode) => app.mode(mode).await,
 
         Commands::Position { output, x, y, test } => app.set_position(&output, x, y, test).await,
+
+        Commands::Xwayland { primary, .. } => app.set_xwayland_primary(primary.as_deref()).await,
     }
 }
 
@@ -343,6 +356,16 @@ impl App {
         set_position(&mut self.context, output, x, y, test)?;
         self.receive_config_messages().await?;
         self.auto_correct_offsets(output, test).await
+    }
+
+    async fn set_xwayland_primary(
+        &mut self,
+        output: Option<&str>,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        self.dispatch_until_manager_done().await?;
+        self.context.set_xwayland_primary(output)?;
+        self.dispatch_until_manager_done().await?;
+        Ok(())
     }
 
     // Offset outputs in case of negative positioning.
@@ -558,17 +581,25 @@ fn list(context: &Context) {
                 (Color::Yellow.bold().paint("\n  Adaptive Sync: "))
                 (match sync {
                     AdaptiveSyncStateExt::Always => {
-                        Color::Green.paint("true\n")
+                        Color::Green.paint("true")
                     },
                     AdaptiveSyncStateExt::Automatic => {
-                        Color::Green.paint("automatic\n")
+                        Color::Green.paint("automatic")
                     },
                     _ => {
-                        Color::Red.paint("false\n")
+                        Color::Red.paint("false")
                     }
                 })
             }
-            (Color::Yellow.bold().paint("\n  Modes:"))
+            if let Some(xwayland_primary) = head.xwayland_primary {
+                (Color::Yellow.bold().paint("\n  Xwayland primary: "))
+                (if xwayland_primary {
+                    Color::Green.paint("true")
+                } else {
+                    Color::Red.paint("false")
+                })
+            }
+            (Color::Yellow.bold().paint("\n\n  Modes:"))
         );
 
         for mode in head.modes.values() {
@@ -640,6 +671,15 @@ fn list_kdl(context: &Context) {
                     AdaptiveSyncStateExt::Always => "true",
                     AdaptiveSyncStateExt::Automatic => "automatic",
                     _ => "false",
+                })
+                "\"\n"
+            }
+            if let Some(xwayland_primary) = head.xwayland_primary {
+                "  xwayland_primary \""
+                (if xwayland_primary {
+                    "#true"
+                } else {
+                    "#false"
                 })
                 "\"\n"
             }
