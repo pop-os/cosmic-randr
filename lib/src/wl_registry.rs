@@ -45,7 +45,7 @@ impl Dispatch<wl_registry::WlRegistry, ()> for Context {
             if "zcosmic_output_manager_v1" == &interface[..] {
                 state.cosmic_output_manager = Some(registry.bind::<ZcosmicOutputManagerV1, _, _>(
                     name,
-                    version.min(2),
+                    version.min(3),
                     handle,
                     (),
                 ))

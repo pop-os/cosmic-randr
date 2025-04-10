@@ -52,6 +52,7 @@ pub struct Output {
     pub current: Option<ModeKey>,
     pub adaptive_sync: Option<AdaptiveSyncState>,
     pub adaptive_sync_availability: Option<AdaptiveSyncAvailability>,
+    pub xwayland_primary: Option<bool>,
 }
 
 impl Output {
@@ -71,6 +72,7 @@ impl Output {
             current: None,
             adaptive_sync: None,
             adaptive_sync_availability: None,
+            xwayland_primary: None,
         }
     }
 }
@@ -370,6 +372,14 @@ pub async fn list() -> Result<List, Error> {
                     if let Some(entry) = node.entries().first() {
                         if let Some(string) = entry.value().as_string() {
                             output.mirroring = Some(string.to_string());
+                        }
+                    }
+                }
+
+                "xwayland_primary" => {
+                    if let Some(entry) = node.entries().first() {
+                        if let Some(val) = entry.value().as_bool() {
+                            output.xwayland_primary = Some(val);
                         }
                     }
                 }

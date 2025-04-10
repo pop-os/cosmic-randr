@@ -40,7 +40,9 @@ pub struct OutputHead {
     pub serial_number: String,
     pub transform: Option<Transform>,
     pub mirroring: Option<String>,
+    pub xwayland_primary: Option<bool>,
     pub wlr_head: ZwlrOutputHeadV1,
+    pub cosmic_head: Option<ZcosmicOutputHeadV1>,
 }
 
 impl Dispatch<ZwlrOutputHeadV1, ()> for Context {
@@ -54,8 +56,8 @@ impl Dispatch<ZwlrOutputHeadV1, ()> for Context {
     ) {
         let head = state
             .output_heads
-            .entry(proxy.id())
-            .or_insert_with(|| OutputHead::new(proxy.clone()));
+            .get_mut(&proxy.id())
+            .expect("Inert WlrOutputHead");
 
         match event {
             ZwlrOutputHeadEvent::Name { name } => {
@@ -166,6 +168,9 @@ impl Dispatch<ZcosmicOutputHeadV1, ObjectId> for Context {
             ZcosmicOutputHeadEvent::AdaptiveSyncExt { state } => {
                 head.adaptive_sync = state.into_result().ok();
             }
+            ZcosmicOutputHeadEvent::XwaylandPrimary { state } => {
+                head.xwayland_primary = Some(state != 0);
+            }
             _ => tracing::debug!(?event, "unknown event"),
         }
     }
@@ -173,7 +178,7 @@ impl Dispatch<ZcosmicOutputHeadV1, ObjectId> for Context {
 
 impl OutputHead {
     #[must_use]
-    pub fn new(wlr_head: ZwlrOutputHeadV1) -> Self {
+    pub fn new(wlr_head: ZwlrOutputHeadV1, cosmic_head: Option<ZcosmicOutputHeadV1>) -> Self {
         Self {
             adaptive_sync: None,
             adaptive_sync_support: None,
@@ -192,7 +197,9 @@ impl OutputHead {
             serial_number: String::new(),
             transform: None,
             mirroring: None,
+            xwayland_primary: None,
             wlr_head,
+            cosmic_head,
         }
     }
 }

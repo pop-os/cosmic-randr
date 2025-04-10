@@ -8,7 +8,9 @@ use cosmic_protocols::output_management::v1::client::zcosmic_output_configuratio
 };
 use cosmic_protocols::output_management::v1::client::zcosmic_output_configuration_v1::ZcosmicOutputConfigurationV1;
 use cosmic_protocols::output_management::v1::client::zcosmic_output_head_v1::AdaptiveSyncStateExt;
-use cosmic_protocols::output_management::v1::client::zcosmic_output_manager_v1::ZcosmicOutputManagerV1;
+use cosmic_protocols::output_management::v1::client::zcosmic_output_manager_v1::{
+    self, ZcosmicOutputManagerV1,
+};
 use std::collections::HashMap;
 use std::fmt;
 use tachyonix::Sender;
@@ -78,6 +80,7 @@ pub enum ConfigurationError {
     PositionForMirroredOutput,
     MirroringItself,
     UnsupportedVrrState,
+    UnsupportedXwaylandPrimary,
 }
 
 impl fmt::Display for ConfigurationError {
@@ -86,12 +89,15 @@ impl fmt::Display for ConfigurationError {
             Self::OutputAlreadyConfigured => f.write_str("Output configured twice"),
             Self::UnknownOutput => f.write_str("Unknown output"),
             Self::ModeNotFound => f.write_str("Unknown or unsupported mode"),
-            Self::NoCosmicExtension => f.write_str("Mirroring isn't available outside COSMIC"),
+            Self::NoCosmicExtension => f.write_str("Feature isn't available outside COSMIC"),
             Self::PositionForMirroredOutput => f.write_str("You cannot position a mirrored output"),
             Self::MirroringItself => f.write_str("Output mirroring itself"),
             Self::UnsupportedVrrState => {
                 f.write_str("Automatic VRR state management isn't available outside COSMIC")
             }
+            Self::UnsupportedXwaylandPrimary => f.write_str(
+                "Xwayland compatibility options not available outside or on this version of COSMIC",
+            ),
         }
     }
 }
@@ -346,6 +352,32 @@ impl Context {
             known_heads: self.output_heads.values().cloned().collect(),
             configured_heads: Vec::new(),
         }
+    }
+
+    pub fn set_xwayland_primary(&self, output: Option<&str>) -> Result<(), ConfigurationError> {
+        let Some(cosmic_output_manager) = self.cosmic_output_manager.as_ref() else {
+            return Err(ConfigurationError::NoCosmicExtension);
+        };
+        if cosmic_output_manager.version()
+            < zcosmic_output_manager_v1::REQ_SET_XWAYLAND_PRIMARY_SINCE
+        {
+            return Err(ConfigurationError::UnsupportedXwaylandPrimary);
+        }
+
+        match output {
+            None => cosmic_output_manager.set_xwayland_primary(None),
+            Some(name) => {
+                let head = self
+                    .output_heads
+                    .values()
+                    .filter(|head| head.cosmic_head.is_some())
+                    .find(|head| head.name == name)
+                    .ok_or(ConfigurationError::UnknownOutput)?;
+                cosmic_output_manager.set_xwayland_primary(Some(head.cosmic_head.as_ref().unwrap()))
+            }
+        };
+
+        Ok(())
     }
 
     pub fn connect(sender: Sender<Message>) -> Result<(Self, EventQueue<Self>), Error> {

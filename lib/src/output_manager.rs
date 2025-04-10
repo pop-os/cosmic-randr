@@ -23,15 +23,21 @@ impl Dispatch<ZwlrOutputManagerV1, ()> for Context {
     ) {
         match event {
             ZwlrOutputManagerEvent::Head { head } => {
-                if let Some(cosmic_extension) = state.cosmic_output_manager.as_ref() {
-                    cosmic_extension.get_head(&head, handle, head.id());
+                let cosmic_head =
+                    if let Some(cosmic_extension) = state.cosmic_output_manager.as_ref() {
+                        let cosmic_head = cosmic_extension.get_head(&head, handle, head.id());
 
-                    // Use `sync` callback to wait until `get_head` is processed and
-                    // we also have cosmic extension events.
-                    let callback = conn.display().sync(handle, ());
-                    state.cosmic_manager_sync_callback = Some(callback);
-                }
-                state.output_heads.insert(head.id(), OutputHead::new(head));
+                        // Use `sync` callback to wait until `get_head` is processed and
+                        // we also have cosmic extension events.
+                        let callback = conn.display().sync(handle, ());
+                        state.cosmic_manager_sync_callback = Some(callback);
+                        Some(cosmic_head)
+                    } else {
+                        None
+                    };
+                state
+                    .output_heads
+                    .insert(head.id(), OutputHead::new(head, cosmic_head));
             }
 
             ZwlrOutputManagerEvent::Done { serial } => {
