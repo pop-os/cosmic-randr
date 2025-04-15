@@ -675,13 +675,13 @@ fn list_kdl(context: &Context) {
                 "\"\n"
             }
             if let Some(xwayland_primary) = head.xwayland_primary {
-                "  xwayland_primary \""
+                "  xwayland_primary "
                 (if xwayland_primary {
                     "#true"
                 } else {
                     "#false"
                 })
-                "\"\n"
+                "\n"
             }
             if !head.serial_number.is_empty() {
                 "  serial_number=\"" (head.serial_number) "\"\n"
