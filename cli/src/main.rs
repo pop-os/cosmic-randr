@@ -684,7 +684,7 @@ fn list_kdl(context: &Context) {
                 "\n"
             }
             if !head.serial_number.is_empty() {
-                "  serial_number=\"" (head.serial_number) "\"\n"
+                "  serial_number \"" (head.serial_number) "\"\n"
             }
             "  modes {"
         );
