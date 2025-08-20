@@ -433,4 +433,39 @@ impl Context {
             manager.stop();
         }
     }
+
+    pub async fn apply_current_config(&mut self) -> Result<(), ConfigurationError> {
+        let Some(cosmic_output_manager) = self.cosmic_output_manager.as_ref() else {
+            return Err(ConfigurationError::NoCosmicExtension);
+        };
+        if cosmic_output_manager.version()
+            < zcosmic_output_manager_v1::REQ_SET_XWAYLAND_PRIMARY_SINCE
+        {
+            return Err(ConfigurationError::UnsupportedXwaylandPrimary);
+        }
+
+        let configuration = self.output_manager.as_ref().unwrap().create_configuration(
+            self.output_manager_serial,
+            &self.handle,
+            (),
+        );
+
+        let cosmic_configuration = self
+            .cosmic_output_manager
+            .as_ref()
+            .map(|extension| extension.get_configuration(&configuration, &self.handle, ()));
+
+        let config_obj = Configuration {
+            obj: configuration,
+            cosmic_obj: cosmic_configuration,
+            cosmic_output_manager: self.cosmic_output_manager.clone(),
+            handle: self.handle.clone(),
+            known_heads: self.output_heads.values().cloned().collect(),
+            configured_heads: Vec::new(),
+        };
+
+        config_obj.apply();
+
+        Ok(())
+    }
 }
