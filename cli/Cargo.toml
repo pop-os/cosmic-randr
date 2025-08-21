@@ -10,11 +10,13 @@ name = "cosmic-randr"
 path = "src/main.rs"
 
 [dependencies]
+kdl = "6.3.4"
 clap = { version = "4.5.30", features = ["derive"] }
 fomat-macros = "0.3.2"
 futures-lite = "2.6.0"
+cosmic-randr-shell = { path = "../shell" }
 cosmic-randr = { path = "../lib" }
 tachyonix = "0.3.1"
-tokio = { version = "1.43.0", features = [ "macros", "rt" ]}
+tokio = { version = "1.43.0", features = ["macros", "rt", "io-std", "io-util"] }
 wayland-client = "0.31.8"
 nu-ansi-term = "0.50.1"

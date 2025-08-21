@@ -3,7 +3,7 @@
 
 use std::fmt::Display;
 
-use kdl::{KdlDocument, KdlError};
+use kdl::{KdlDocument, KdlEntry, KdlError};
 use slotmap::SlotMap;
 
 slotmap::new_key_type! {
@@ -13,7 +13,7 @@ slotmap::new_key_type! {
     pub struct ModeKey;
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct Mode {
     pub size: (u32, u32),
     pub refresh_rate: u32,
@@ -37,7 +37,7 @@ pub struct List {
     pub modes: SlotMap<ModeKey, Mode>,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct Output {
     pub name: String,
     pub enabled: bool,
@@ -123,6 +123,56 @@ impl TryFrom<&str> for Transform {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum AdaptiveSyncStateKdl {
+    Always,
+    Auto,
+    Disabled,
+}
+
+impl Display for AdaptiveSyncStateKdl {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(match self {
+            AdaptiveSyncStateKdl::Always => "kdl_true",
+            AdaptiveSyncStateKdl::Auto => "automatic",
+            AdaptiveSyncStateKdl::Disabled => "kdl_false",
+        })
+    }
+}
+
+impl TryFrom<&str> for AdaptiveSyncStateKdl {
+    type Error = &'static str;
+
+    fn try_from(value: &str) -> Result<Self, Self::Error> {
+        Ok(match value {
+            "kdl_true" => AdaptiveSyncStateKdl::Always,
+            "automatic" => AdaptiveSyncStateKdl::Auto,
+            "kdl_false" => AdaptiveSyncStateKdl::Disabled,
+            _ => return Err("unknown adaptive_sync state variant"),
+        })
+    }
+}
+
+impl From<AdaptiveSyncStateKdl> for AdaptiveSyncState {
+    fn from(value: AdaptiveSyncStateKdl) -> Self {
+        match value {
+            AdaptiveSyncStateKdl::Always => AdaptiveSyncState::Always,
+            AdaptiveSyncStateKdl::Auto => AdaptiveSyncState::Auto,
+            AdaptiveSyncStateKdl::Disabled => AdaptiveSyncState::Disabled,
+        }
+    }
+}
+
+impl From<AdaptiveSyncState> for AdaptiveSyncStateKdl {
+    fn from(value: AdaptiveSyncState) -> Self {
+        match value {
+            AdaptiveSyncState::Always => AdaptiveSyncStateKdl::Always,
+            AdaptiveSyncState::Auto => AdaptiveSyncStateKdl::Auto,
+            AdaptiveSyncState::Disabled => AdaptiveSyncStateKdl::Disabled,
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum AdaptiveSyncState {
     Always,
     Auto,
@@ -149,6 +199,60 @@ impl TryFrom<&str> for AdaptiveSyncState {
             "false" => AdaptiveSyncState::Disabled,
             _ => return Err("unknown adaptive_sync state variant"),
         })
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum AdaptiveSyncAvailabilityKdl {
+    Supported,
+    RequiresModeset,
+    Unsupported,
+}
+
+impl Display for AdaptiveSyncAvailabilityKdl {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(match self {
+            AdaptiveSyncAvailabilityKdl::Supported => "kdl_true",
+            AdaptiveSyncAvailabilityKdl::RequiresModeset => "requires_modeset",
+            AdaptiveSyncAvailabilityKdl::Unsupported => "kdl_false",
+        })
+    }
+}
+
+impl TryFrom<&str> for AdaptiveSyncAvailabilityKdl {
+    type Error = &'static str;
+
+    fn try_from(value: &str) -> Result<Self, Self::Error> {
+        Ok(match value {
+            "kdl_true" => AdaptiveSyncAvailabilityKdl::Supported,
+            "requires_modeset" => AdaptiveSyncAvailabilityKdl::RequiresModeset,
+            "kdl_false" => AdaptiveSyncAvailabilityKdl::Unsupported,
+            _ => return Err("unknown adaptive_sync availability variant"),
+        })
+    }
+}
+
+impl From<AdaptiveSyncAvailabilityKdl> for AdaptiveSyncAvailability {
+    fn from(value: AdaptiveSyncAvailabilityKdl) -> Self {
+        match value {
+            AdaptiveSyncAvailabilityKdl::Supported => AdaptiveSyncAvailability::Supported,
+            AdaptiveSyncAvailabilityKdl::RequiresModeset => {
+                AdaptiveSyncAvailability::RequiresModeset
+            }
+            AdaptiveSyncAvailabilityKdl::Unsupported => AdaptiveSyncAvailability::Unsupported,
+        }
+    }
+}
+
+impl From<AdaptiveSyncAvailability> for AdaptiveSyncAvailabilityKdl {
+    fn from(value: AdaptiveSyncAvailability) -> Self {
+        match value {
+            AdaptiveSyncAvailability::Supported => AdaptiveSyncAvailabilityKdl::Supported,
+            AdaptiveSyncAvailability::RequiresModeset => {
+                AdaptiveSyncAvailabilityKdl::RequiresModeset
+            }
+            AdaptiveSyncAvailability::Unsupported => AdaptiveSyncAvailabilityKdl::Unsupported,
+        }
     }
 }
 
@@ -210,188 +314,512 @@ pub async fn list() -> Result<List, Error> {
         .parse::<KdlDocument>()
         .map_err(Error::Kdl)?;
 
-    let mut outputs = List {
-        outputs: SlotMap::with_key(),
-        modes: SlotMap::with_key(),
-    };
-
-    // Each node in the root of the document is an output.
-    for node in document.nodes() {
-        if node.name().value() != "output" {
-            eprintln!("not output");
-            continue;
+    match List::try_from(document) {
+        Ok(v) => Ok(v),
+        Err(KdlParseWithError { list, errors }) => {
+            for err in errors {
+                eprintln!("{err:?}");
+            }
+            Ok(list)
         }
+    }
+}
 
-        // Parse the properties of the output mode
-        let mut entries = node.entries().iter();
+#[derive(Debug, Clone)]
+pub enum KdlParseError {
+    InvalidRootNode(String),
+    InvalidKey(String),
+    InvalidValue { key: String, value: Vec<KdlEntry> },
+    MissingOutputName,
+    MissingOutputChildren,
+    MissingModeChildren,
+    MissingEntryName,
+}
 
-        // The first value is the name of the otuput
-        let Some(name) = entries.next().and_then(|e| e.value().as_string()) else {
-            eprintln!("no name value");
-            continue;
+#[derive(Debug, Clone)]
+pub struct KdlParseWithError {
+    pub list: List,
+    pub errors: Vec<KdlParseError>,
+}
+
+impl TryFrom<KdlDocument> for List {
+    type Error = KdlParseWithError;
+
+    fn try_from(document: KdlDocument) -> Result<Self, Self::Error> {
+        let mut outputs = List {
+            outputs: SlotMap::with_key(),
+            modes: SlotMap::with_key(),
         };
+        let mut errors = Vec::new();
 
-        let mut output = Output::new();
+        // Each node in the root of the document is an output.
+        for node in document.nodes() {
+            if node.name().value() != "output" {
+                errors.push(KdlParseError::InvalidRootNode(
+                    node.name().value().to_string(),
+                ));
+                continue;
+            }
 
-        // Check if the output contains the `enabled` attribute.
-        for entry in entries {
-            let Some(entry_name) = entry.name() else {
+            // Parse the properties of the output mode
+            let mut entries = node.entries().iter();
+
+            // The first value is the name of the otuput
+            let Some(name) = entries.next().and_then(|e| e.value().as_string()) else {
+                errors.push(KdlParseError::MissingOutputName);
                 continue;
             };
 
-            if entry_name.value() == "enabled" {
-                if let Some(enabled) = entry.value().as_bool() {
-                    output.enabled = enabled;
+            let mut output = Output::new();
+
+            // Check if the output contains the `enabled` attribute.
+            for entry in entries {
+                let Some(entry_name) = entry.name() else {
+                    errors.push(KdlParseError::MissingEntryName);
+                    continue;
+                };
+
+                if entry_name.value() == "enabled" {
+                    if let Some(enabled) = entry.value().as_bool() {
+                        output.enabled = enabled;
+                    }
                 }
             }
+
+            // Gets the properties of the output.
+            let Some(children) = node.children() else {
+                errors.push(KdlParseError::MissingOutputChildren);
+                continue;
+            };
+
+            for node in children.nodes() {
+                match node.name().value() {
+                    // Parse the make and model of the display output.
+                    "description" => {
+                        for entry in node.entries() {
+                            let value = entry.value().as_string();
+
+                            match entry.name().map(kdl::KdlIdentifier::value) {
+                                Some("make") => {
+                                    output.make = value.map(String::from);
+                                }
+
+                                Some("model") => {
+                                    if let Some(model) = value {
+                                        output.model = String::from(model);
+                                    }
+                                }
+
+                                v => errors.push(KdlParseError::InvalidKey(
+                                    v.map_or(String::default(), |s| s.to_string()),
+                                )),
+                            }
+                        }
+                    }
+
+                    // Parse the physical width and height in millimeters
+                    "physical" => {
+                        if let [width, height, ..] = node.entries() {
+                            output.physical = (
+                                width.value().as_integer().unwrap_or_default() as u32,
+                                height.value().as_integer().unwrap_or_default() as u32,
+                            );
+                        } else {
+                            errors.push(KdlParseError::InvalidValue {
+                                key: "physical".to_string(),
+                                value: node.entries().to_vec(),
+                            });
+                        }
+                    }
+
+                    // Parse the pixel coordinates of the output.
+                    "position" => {
+                        if let [x_pos, y_pos, ..] = node.entries() {
+                            output.position = (
+                                x_pos.value().as_integer().unwrap_or_default() as i32,
+                                y_pos.value().as_integer().unwrap_or_default() as i32,
+                            );
+                        } else {
+                            errors.push(KdlParseError::InvalidValue {
+                                key: "position".to_string(),
+                                value: node.entries().to_vec(),
+                            });
+                        }
+                    }
+
+                    "scale" => {
+                        if let Some(entry) = node.entries().first() {
+                            if let Some(scale) = entry.value().as_float() {
+                                output.scale = scale;
+                            }
+                        } else {
+                            errors.push(KdlParseError::InvalidValue {
+                                key: "scale".to_string(),
+                                value: node.entries().to_vec(),
+                            });
+                        }
+                    }
+
+                    // Parse the transform value of the output.
+                    "transform" => {
+                        if let Some(entry) = node.entries().first() {
+                            if let Some(string) = entry.value().as_string() {
+                                output.transform = Transform::try_from(string).ok();
+                            }
+                        } else {
+                            errors.push(KdlParseError::InvalidValue {
+                                key: "transform".to_string(),
+                                value: node.entries().to_vec(),
+                            });
+                        }
+                    }
+
+                    "adaptive_sync" => {
+                        if let Some(entry) = node.entries().first() {
+                            if let Some(string) = entry.value().as_string() {
+                                output.adaptive_sync = AdaptiveSyncStateKdl::try_from(string)
+                                    .ok()
+                                    .map(AdaptiveSyncState::from);
+                            }
+                        } else {
+                            errors.push(KdlParseError::InvalidValue {
+                                key: "adaptive_sync".to_string(),
+                                value: node.entries().to_vec(),
+                            });
+                        }
+                    }
+
+                    "adaptive_sync_support" => {
+                        if let Some(entry) = node.entries().first() {
+                            if let Some(string) = entry.value().as_string() {
+                                output.adaptive_sync_availability =
+                                    AdaptiveSyncAvailabilityKdl::try_from(string)
+                                        .ok()
+                                        .map(AdaptiveSyncAvailability::from);
+                            }
+                        } else {
+                            errors.push(KdlParseError::InvalidValue {
+                                key: "adaptive_sync_support".to_string(),
+                                value: node.entries().to_vec(),
+                            });
+                        }
+                    }
+
+                    // Switch to parsing output modes.
+                    "modes" => {
+                        let Some(children) = node.children() else {
+                            errors.push(KdlParseError::MissingModeChildren);
+                            continue;
+                        };
+
+                        for node in children.nodes() {
+                            if node.name().value() == "mode" {
+                                let mut current = false;
+                                let mut mode = Mode::new();
+
+                                if let [width, height, refresh, ..] = node.entries() {
+                                    mode.size = (
+                                        width.value().as_integer().unwrap_or_default() as u32,
+                                        height.value().as_integer().unwrap_or_default() as u32,
+                                    );
+
+                                    mode.refresh_rate =
+                                        refresh.value().as_integer().unwrap_or_default() as u32;
+                                };
+
+                                for entry in node.entries().iter().skip(3) {
+                                    match entry.name().map(kdl::KdlIdentifier::value) {
+                                        Some("current") => current = true,
+                                        Some("preferred") => mode.preferred = true,
+                                        _ => {
+                                            errors.push(KdlParseError::InvalidKey(
+                                                entry
+                                                    .name()
+                                                    .map_or(String::default(), |s| s.to_string()),
+                                            ));
+                                        }
+                                    }
+                                }
+
+                                let mode_id = outputs.modes.insert(mode);
+
+                                if current {
+                                    output.current = Some(mode_id);
+                                }
+
+                                output.modes.push(mode_id);
+                            } else {
+                                errors.push(KdlParseError::InvalidKey(
+                                    node.name().value().to_string(),
+                                ));
+                            }
+                        }
+                    }
+
+                    "mirroring" => {
+                        let mut applied = false;
+
+                        if let Some(entry) = node.entries().first() {
+                            if let Some(string) = entry.value().as_string() {
+                                applied = true;
+                                output.mirroring = Some(string.to_string());
+                            }
+                        }
+                        if !applied {
+                            errors.push(KdlParseError::InvalidValue {
+                                key: "mirroring".to_string(),
+                                value: node.entries().to_vec(),
+                            });
+                        }
+                    }
+
+                    "xwayland_primary" => {
+                        let mut applied = false;
+                        if let Some(entry) = node.entries().first() {
+                            if let Some(val) = entry.value().as_bool() {
+                                applied = true;
+                                output.xwayland_primary = Some(val);
+                            }
+                        }
+                        if !applied {
+                            errors.push(KdlParseError::InvalidValue {
+                                key: "xwayland_primary".to_string(),
+                                value: node.entries().to_vec(),
+                            });
+                        }
+                    }
+
+                    _ => errors.push(KdlParseError::InvalidKey(node.name().value().to_string())),
+                };
+            }
+
+            output.name = name.to_owned();
+
+            outputs.outputs.insert(output);
+        }
+        if errors.is_empty() {
+            Ok(outputs)
+        } else {
+            Err(KdlParseWithError {
+                list: outputs,
+                errors,
+            })
+        }
+    }
+}
+
+impl From<List> for KdlDocument {
+    fn from(value: List) -> Self {
+        let mut doc = KdlDocument::new();
+
+        for (_output_key, output) in value.outputs.iter() {
+            let mut output_node = kdl::KdlNode::new("output");
+
+            // First entry: output name (unnamed)
+            output_node.push(output.name.clone());
+
+            // Additional entries: enabled (named)
+            output_node.push(("enabled", output.enabled));
+
+            // Children: description, physical, position, scale, transform, adaptive_sync, adaptive_sync_support, mirroring, xwayland_primary, modes
+            let mut children = KdlDocument::new();
+
+            // description node
+            if output.make.is_some() || !output.model.is_empty() {
+                let mut desc_node = kdl::KdlNode::new("description");
+                if let Some(make) = &output.make {
+                    desc_node.push(("make", make.clone()));
+                }
+                if !output.model.is_empty() {
+                    desc_node.push(("model", output.model.clone()));
+                }
+                children.nodes_mut().push(desc_node);
+            }
+
+            // physical node
+            children.nodes_mut().push({
+                let mut node = kdl::KdlNode::new("physical");
+                node.push(output.physical.0 as i128);
+                node.push(output.physical.1 as i128);
+                node
+            });
+
+            // position node
+            children.nodes_mut().push({
+                let mut node = kdl::KdlNode::new("position");
+                node.push(output.position.0 as i128);
+                node.push(output.position.1 as i128);
+                node
+            });
+
+            // scale node
+            children.nodes_mut().push({
+                let mut node = kdl::KdlNode::new("scale");
+                node.push(output.scale);
+                node
+            });
+
+            // transform node
+            if let Some(transform) = output.transform {
+                let mut node = kdl::KdlNode::new("transform");
+                node.push(transform.to_string());
+                children.nodes_mut().push(node);
+            }
+
+            // adaptive_sync node
+            if let Some(adaptive_sync) = output.adaptive_sync {
+                let mut node = kdl::KdlNode::new("adaptive_sync");
+                node.push(AdaptiveSyncStateKdl::from(adaptive_sync).to_string());
+                children.nodes_mut().push(node);
+            }
+
+            if let Some(adaptive_sync_availability) = output.adaptive_sync_availability {
+                let mut node = kdl::KdlNode::new("adaptive_sync_support");
+                node.push(
+                    AdaptiveSyncAvailabilityKdl::from(adaptive_sync_availability).to_string(),
+                );
+                children.nodes_mut().push(node);
+            }
+
+            // mirroring node
+            if let Some(mirroring) = &output.mirroring {
+                let mut node = kdl::KdlNode::new("mirroring");
+                node.push(mirroring.clone());
+                children.nodes_mut().push(node);
+            }
+
+            // xwayland_primary node
+            if let Some(xwayland_primary) = output.xwayland_primary {
+                let mut node = kdl::KdlNode::new("xwayland_primary");
+                node.push(xwayland_primary);
+                children.nodes_mut().push(node);
+            }
+
+            // modes node
+            let mut modes_node = kdl::KdlNode::new("modes");
+            let mut modes_children = KdlDocument::new();
+
+            for mode_key in &output.modes {
+                if let Some(mode) = value.modes.get(*mode_key) {
+                    let mut mode_node = kdl::KdlNode::new("mode");
+                    mode_node.push(mode.size.0 as i128);
+                    mode_node.push(mode.size.1 as i128);
+                    mode_node.push(mode.refresh_rate as i128);
+
+                    if output.current == Some(*mode_key) {
+                        mode_node.push(("current", true));
+                    }
+                    if mode.preferred {
+                        mode_node.push(("preferred", true));
+                    }
+                    modes_children.nodes_mut().push(mode_node);
+                }
+            }
+
+            if !modes_children.nodes().is_empty() {
+                modes_node.set_children(modes_children);
+                children.nodes_mut().push(modes_node);
+            }
+
+            output_node.set_children(children);
+
+            doc.nodes_mut().push(output_node);
         }
 
-        // Gets the properties of the output.
-        let Some(children) = node.children() else {
-            continue;
+        doc
+    }
+}
+#[cfg(test)]
+
+mod test {
+    use super::*;
+    use kdl::KdlDocument;
+
+    #[test]
+    fn test_kdl_serialization_deserialization() {
+        let mut list = List::default();
+
+        let mode1 = Mode {
+            size: (1920, 1080),
+            refresh_rate: 60000,
+            preferred: true,
+        };
+        let mode2 = Mode {
+            size: (1280, 720),
+            refresh_rate: 60000,
+            preferred: false,
         };
 
-        for node in children.nodes() {
-            match node.name().value() {
-                // Parse the make and model of the display output.
-                "description" => {
-                    for entry in node.entries() {
-                        let value = entry.value().as_string();
+        let mode1_key = list.modes.insert(mode1);
+        let mode2_key = list.modes.insert(mode2);
 
-                        match entry.name().map(kdl::KdlIdentifier::value) {
-                            Some("make") => {
-                                output.make = value.map(String::from);
-                            }
+        let output = Output {
+            name: "HDMI-A-1".to_string(),
+            enabled: true,
+            mirroring: Some("eDP-1".to_string()),
+            make: Some("Hello".to_string()),
+            model: "Hi".to_string(),
+            physical: (344, 194),
+            position: (0, 0),
+            scale: 1.0,
+            transform: Some(Transform::Normal),
+            modes: vec![mode1_key, mode2_key],
+            current: Some(mode1_key),
+            adaptive_sync: Some(AdaptiveSyncState::Auto),
+            adaptive_sync_availability: Some(AdaptiveSyncAvailability::Supported),
+            xwayland_primary: Some(true),
+        };
 
-                            Some("model") => {
-                                if let Some(model) = value {
-                                    output.model = String::from(model);
-                                }
-                            }
+        list.outputs.insert(output);
 
-                            _ => (),
-                        }
-                    }
+        // Serialize to KDL
+        let kdl_doc: KdlDocument = list.clone().into();
+        let kdl_string = kdl_doc.to_string();
+
+        // Parse back from KDL
+        let parsed_doc: KdlDocument = kdl_string.parse().expect("KDL parse failed");
+        let parsed_list = List::try_from(parsed_doc)
+            .map_err(|e| {
+                for err in &e.errors {
+                    eprintln!("{:?}", err);
                 }
+                e
+            })
+            .expect("KDL deserialization failed");
 
-                // Parse the physical width and height in millimeters
-                "physical" => {
-                    if let [width, height, ..] = node.entries() {
-                        output.physical = (
-                            width.value().as_integer().unwrap_or_default() as u32,
-                            height.value().as_integer().unwrap_or_default() as u32,
-                        );
-                    }
-                }
+        // Compare the original and parsed List
+        // Since SlotMap keys are not preserved, compare the Output fields and Mode values
+        let orig_output = list.outputs.values().next().unwrap();
+        let parsed_output = parsed_list.outputs.values().next().unwrap();
 
-                // Parse the pixel coordinates of the output.
-                "position" => {
-                    if let [x_pos, y_pos, ..] = node.entries() {
-                        output.position = (
-                            x_pos.value().as_integer().unwrap_or_default() as i32,
-                            y_pos.value().as_integer().unwrap_or_default() as i32,
-                        );
-                    }
-                }
+        assert_eq!(orig_output.name, parsed_output.name);
+        assert_eq!(orig_output.enabled, parsed_output.enabled);
+        assert_eq!(orig_output.mirroring, parsed_output.mirroring);
+        assert_eq!(orig_output.make, parsed_output.make);
+        assert_eq!(orig_output.model, parsed_output.model);
+        assert_eq!(orig_output.physical, parsed_output.physical);
+        assert_eq!(orig_output.position, parsed_output.position);
+        assert_eq!(orig_output.scale, parsed_output.scale);
+        assert_eq!(orig_output.transform, parsed_output.transform);
+        assert_eq!(orig_output.adaptive_sync, parsed_output.adaptive_sync);
+        assert_eq!(
+            orig_output.adaptive_sync_availability,
+            parsed_output.adaptive_sync_availability
+        );
+        assert_eq!(orig_output.xwayland_primary, parsed_output.xwayland_primary);
 
-                "scale" => {
-                    if let Some(entry) = node.entries().first() {
-                        if let Some(scale) = entry.value().as_float() {
-                            output.scale = scale;
-                        }
-                    }
-                }
-
-                // Parse the transform value of the output.
-                "transform" => {
-                    if let Some(entry) = node.entries().first() {
-                        if let Some(string) = entry.value().as_string() {
-                            output.transform = Transform::try_from(string).ok();
-                        }
-                    }
-                }
-
-                "adaptive_sync" => {
-                    if let Some(entry) = node.entries().first() {
-                        if let Some(string) = entry.value().as_string() {
-                            output.adaptive_sync = AdaptiveSyncState::try_from(string).ok();
-                        }
-                    }
-                }
-
-                "adaptive_sync_support" => {
-                    if let Some(entry) = node.entries().first() {
-                        if let Some(string) = entry.value().as_string() {
-                            output.adaptive_sync_availability =
-                                AdaptiveSyncAvailability::try_from(string).ok();
-                        }
-                    }
-                }
-
-                // Switch to parsing output modes.
-                "modes" => {
-                    let Some(children) = node.children() else {
-                        continue;
-                    };
-
-                    for node in children.nodes() {
-                        if node.name().value() == "mode" {
-                            let mut current = false;
-                            let mut mode = Mode::new();
-
-                            if let [width, height, refresh, ..] = node.entries() {
-                                mode.size = (
-                                    width.value().as_integer().unwrap_or_default() as u32,
-                                    height.value().as_integer().unwrap_or_default() as u32,
-                                );
-
-                                mode.refresh_rate =
-                                    refresh.value().as_integer().unwrap_or_default() as u32;
-                            };
-
-                            for entry in node.entries().iter().skip(3) {
-                                match entry.name().map(kdl::KdlIdentifier::value) {
-                                    Some("current") => current = true,
-                                    Some("preferred") => mode.preferred = true,
-                                    _ => (),
-                                }
-                            }
-
-                            let mode_id = outputs.modes.insert(mode);
-
-                            if current {
-                                output.current = Some(mode_id);
-                            }
-
-                            output.modes.push(mode_id);
-                        }
-                    }
-                }
-
-                "mirroring" => {
-                    if let Some(entry) = node.entries().first() {
-                        if let Some(string) = entry.value().as_string() {
-                            output.mirroring = Some(string.to_string());
-                        }
-                    }
-                }
-
-                "xwayland_primary" => {
-                    if let Some(entry) = node.entries().first() {
-                        if let Some(val) = entry.value().as_bool() {
-                            output.xwayland_primary = Some(val);
-                        }
-                    }
-                }
-
-                _ => (),
-            }
+        // Compare modes by value (order should be preserved)
+        let orig_modes: Vec<_> = orig_output.modes.iter().map(|k| &list.modes[*k]).collect();
+        let parsed_modes: Vec<_> = parsed_output
+            .modes
+            .iter()
+            .map(|k| &parsed_list.modes[*k])
+            .collect();
+        assert_eq!(orig_modes.len(), parsed_modes.len());
+        for (a, b) in orig_modes.iter().zip(parsed_modes.iter()) {
+            assert_eq!(a.size, b.size);
+            assert_eq!(a.refresh_rate, b.refresh_rate);
+            assert_eq!(a.preferred, b.preferred);
         }
-
-        output.name = name.to_owned();
-
-        outputs.outputs.insert(output);
     }
-
-    Ok(outputs)
 }

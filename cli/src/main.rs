@@ -7,6 +7,7 @@ use clap::{Parser, ValueEnum};
 use cosmic_randr::context::HeadConfiguration;
 use cosmic_randr::Message;
 use cosmic_randr::{AdaptiveSyncAvailability, AdaptiveSyncStateExt, Context};
+use cosmic_randr_shell::{KdlParseWithError, List};
 use nu_ansi_term::{Color, Style};
 use std::fmt::{Display, Write as FmtWrite};
 use std::io::Write;
@@ -113,6 +114,10 @@ enum Commands {
         #[arg(long, conflicts_with = "primary")]
         no_primary: bool,
     },
+
+    /// List of output configurations to apply in KDL format
+    /// Read via stdin
+    Kdl,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, PartialOrd, Ord, ValueEnum)]
@@ -248,6 +253,25 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         Commands::Position { output, x, y, test } => app.set_position(&output, x, y, test).await,
 
         Commands::Xwayland { primary, .. } => app.set_xwayland_primary(primary.as_deref()).await,
+
+        Commands::Kdl => {
+            let mut input = String::new();
+            use tokio::io::AsyncReadExt;
+            tokio::io::stdin()
+                .read_to_string(&mut input)
+                .await
+                .expect("Failed to read stdin");
+            let doc = kdl::KdlDocument::parse(&input).expect("Invalid KDL");
+
+            let list: List = match cosmic_randr_shell::List::try_from(doc) {
+                Ok(l) => l,
+                Err(KdlParseWithError { list, errors }) => {
+                    eprintln!("{errors:?}");
+                    list
+                }
+            };
+            app.apply_list(list).await
+        }
     }
 }
 
@@ -484,6 +508,76 @@ impl App {
         }
 
         Ok(())
+    }
+
+    /// Apply requested output configuration all at once using the protocol
+    async fn apply_list(&mut self, mut list: List) -> Result<(), Box<dyn std::error::Error>> {
+        self.dispatch_until_manager_done().await?;
+
+        // convert list to hashmap of output heads
+
+        let mut current_heads: Vec<_> = self.context.output_heads.values_mut().collect();
+
+        for (_, head) in list.outputs.drain() {
+            for current in &mut current_heads {
+                if current.name == head.name
+                    && current.make == head.clone().make.unwrap_or_default()
+                    && current.model == head.model
+                {
+                    current.adaptive_sync = head.adaptive_sync.map(|sync| match sync {
+                        cosmic_randr_shell::AdaptiveSyncState::Always => {
+                            AdaptiveSyncStateExt::Always
+                        }
+                        cosmic_randr_shell::AdaptiveSyncState::Auto => {
+                            AdaptiveSyncStateExt::Automatic
+                        }
+                        cosmic_randr_shell::AdaptiveSyncState::Disabled => {
+                            AdaptiveSyncStateExt::Disabled
+                        }
+                    });
+                    current.enabled = head.enabled;
+                    current.position_x = head.position.0;
+                    current.position_y = head.position.1;
+                    current.scale = head.scale;
+                    current.transform = head.transform.map(|t| match t {
+                        cosmic_randr_shell::Transform::Normal => WlTransform::Normal,
+                        cosmic_randr_shell::Transform::Rotate90 => WlTransform::_90,
+                        cosmic_randr_shell::Transform::Rotate180 => WlTransform::_180,
+                        cosmic_randr_shell::Transform::Rotate270 => WlTransform::_270,
+                        cosmic_randr_shell::Transform::Flipped => WlTransform::Flipped,
+                        cosmic_randr_shell::Transform::Flipped90 => WlTransform::Flipped90,
+                        cosmic_randr_shell::Transform::Flipped180 => WlTransform::Flipped180,
+                        cosmic_randr_shell::Transform::Flipped270 => WlTransform::Flipped270,
+                    });
+                    current.mirroring = head.mirroring.clone();
+                    current.xwayland_primary = head.xwayland_primary;
+                    if let Some(cur_mode_id) = head
+                        .current
+                        .and_then(|k| list.modes.get(k))
+                        .and_then(|mode_info| {
+                            current.modes.iter_mut().find_map(|(id, mode)| {
+                                if mode.width == mode_info.size.0 as i32
+                                    && mode.height == mode_info.size.1 as i32
+                                {
+                                    mode.refresh = mode_info.refresh_rate as i32;
+                                    mode.preferred = mode_info.preferred;
+                                    Some(id.clone())
+                                } else {
+                                    None
+                                }
+                            })
+                        })
+                    {
+                        current.current_mode = Some(cur_mode_id);
+                    }
+
+                    break;
+                }
+            }
+        }
+
+        self.context.apply_current_config().await?;
+        self.receive_config_messages().await
     }
 }
 
