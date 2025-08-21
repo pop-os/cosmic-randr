@@ -455,7 +455,7 @@ impl Context {
             .as_ref()
             .map(|extension| extension.get_configuration(&configuration, &self.handle, ()));
 
-        let config_obj = Configuration {
+        let mut config_obj = Configuration {
             obj: configuration,
             cosmic_obj: cosmic_configuration,
             cosmic_output_manager: self.cosmic_output_manager.clone(),
@@ -464,6 +464,44 @@ impl Context {
             configured_heads: Vec::new(),
         };
 
+        let known_heads = config_obj.known_heads.clone();
+        let configured_heads = config_obj.configured_heads.clone();
+        for output in known_heads
+            .iter()
+            .filter(|output| !configured_heads.iter().any(|name| *name == output.name))
+        {
+            let head_configuration = HeadConfiguration {
+                size: output.current_mode.as_ref().and_then(|mode_id| {
+                    output
+                        .modes
+                        .get(mode_id)
+                        .map(|mode| (mode.width as u32, mode.height as u32))
+                }),
+                refresh: output.current_mode.as_ref().and_then(|mode_id| {
+                    output
+                        .modes
+                        .get(mode_id)
+                        .map(|mode| mode.refresh as f32 / 1000.0)
+                }),
+                adaptive_sync: output.adaptive_sync,
+                pos: Some((output.position_x, output.position_y)),
+                scale: Some(output.scale),
+                transform: output.transform,
+            };
+            if output.enabled {
+                if let Some(from) = output.mirroring.as_ref() {
+                    config_obj
+                        .mirror_head(&output.name, from, Some(head_configuration))
+                        .unwrap();
+                } else {
+                    config_obj
+                        .enable_head(&output.name, Some(head_configuration))
+                        .unwrap();
+                }
+            } else {
+                config_obj.disable_head(&output.name).unwrap();
+            }
+        }
         config_obj.apply();
 
         Ok(())

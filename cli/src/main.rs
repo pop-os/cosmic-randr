@@ -264,7 +264,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             let doc = kdl::KdlDocument::parse(&input).expect("Invalid KDL");
 
             let list: List = cosmic_randr_shell::List::try_from(doc).unwrap();
-
             app.apply_list(list).await
         }
     }
