@@ -123,6 +123,56 @@ impl TryFrom<&str> for Transform {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum AdaptiveSyncStateKdl {
+    Always,
+    Auto,
+    Disabled,
+}
+
+impl Display for AdaptiveSyncStateKdl {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(match self {
+            AdaptiveSyncStateKdl::Always => "kdl_true",
+            AdaptiveSyncStateKdl::Auto => "automatic",
+            AdaptiveSyncStateKdl::Disabled => "kdl_false",
+        })
+    }
+}
+
+impl TryFrom<&str> for AdaptiveSyncStateKdl {
+    type Error = &'static str;
+
+    fn try_from(value: &str) -> Result<Self, Self::Error> {
+        Ok(match value {
+            "kdl_true" => AdaptiveSyncStateKdl::Always,
+            "automatic" => AdaptiveSyncStateKdl::Auto,
+            "kdl_false" => AdaptiveSyncStateKdl::Disabled,
+            _ => return Err("unknown adaptive_sync state variant"),
+        })
+    }
+}
+
+impl From<AdaptiveSyncStateKdl> for AdaptiveSyncState {
+    fn from(value: AdaptiveSyncStateKdl) -> Self {
+        match value {
+            AdaptiveSyncStateKdl::Always => AdaptiveSyncState::Always,
+            AdaptiveSyncStateKdl::Auto => AdaptiveSyncState::Auto,
+            AdaptiveSyncStateKdl::Disabled => AdaptiveSyncState::Disabled,
+        }
+    }
+}
+
+impl From<AdaptiveSyncState> for AdaptiveSyncStateKdl {
+    fn from(value: AdaptiveSyncState) -> Self {
+        match value {
+            AdaptiveSyncState::Always => AdaptiveSyncStateKdl::Always,
+            AdaptiveSyncState::Auto => AdaptiveSyncStateKdl::Auto,
+            AdaptiveSyncState::Disabled => AdaptiveSyncStateKdl::Disabled,
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum AdaptiveSyncState {
     Always,
     Auto,
@@ -149,6 +199,60 @@ impl TryFrom<&str> for AdaptiveSyncState {
             "false" => AdaptiveSyncState::Disabled,
             _ => return Err("unknown adaptive_sync state variant"),
         })
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum AdaptiveSyncAvailabilityKdl {
+    Supported,
+    RequiresModeset,
+    Unsupported,
+}
+
+impl Display for AdaptiveSyncAvailabilityKdl {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(match self {
+            AdaptiveSyncAvailabilityKdl::Supported => "kdl_true",
+            AdaptiveSyncAvailabilityKdl::RequiresModeset => "requires_modeset",
+            AdaptiveSyncAvailabilityKdl::Unsupported => "kdl_false",
+        })
+    }
+}
+
+impl TryFrom<&str> for AdaptiveSyncAvailabilityKdl {
+    type Error = &'static str;
+
+    fn try_from(value: &str) -> Result<Self, Self::Error> {
+        Ok(match value {
+            "kdl_true" => AdaptiveSyncAvailabilityKdl::Supported,
+            "requires_modeset" => AdaptiveSyncAvailabilityKdl::RequiresModeset,
+            "kdl_false" => AdaptiveSyncAvailabilityKdl::Unsupported,
+            _ => return Err("unknown adaptive_sync availability variant"),
+        })
+    }
+}
+
+impl From<AdaptiveSyncAvailabilityKdl> for AdaptiveSyncAvailability {
+    fn from(value: AdaptiveSyncAvailabilityKdl) -> Self {
+        match value {
+            AdaptiveSyncAvailabilityKdl::Supported => AdaptiveSyncAvailability::Supported,
+            AdaptiveSyncAvailabilityKdl::RequiresModeset => {
+                AdaptiveSyncAvailability::RequiresModeset
+            }
+            AdaptiveSyncAvailabilityKdl::Unsupported => AdaptiveSyncAvailability::Unsupported,
+        }
+    }
+}
+
+impl From<AdaptiveSyncAvailability> for AdaptiveSyncAvailabilityKdl {
+    fn from(value: AdaptiveSyncAvailability) -> Self {
+        match value {
+            AdaptiveSyncAvailability::Supported => AdaptiveSyncAvailabilityKdl::Supported,
+            AdaptiveSyncAvailability::RequiresModeset => {
+                AdaptiveSyncAvailabilityKdl::RequiresModeset
+            }
+            AdaptiveSyncAvailability::Unsupported => AdaptiveSyncAvailabilityKdl::Unsupported,
+        }
     }
 }
 
@@ -373,7 +477,9 @@ impl TryFrom<KdlDocument> for List {
                     "adaptive_sync" => {
                         if let Some(entry) = node.entries().first() {
                             if let Some(string) = entry.value().as_string() {
-                                output.adaptive_sync = AdaptiveSyncState::try_from(string).ok();
+                                output.adaptive_sync = AdaptiveSyncStateKdl::try_from(string)
+                                    .ok()
+                                    .map(AdaptiveSyncState::from);
                             }
                         } else {
                             errors.push(KdlParseError::InvalidValue {
@@ -387,7 +493,9 @@ impl TryFrom<KdlDocument> for List {
                         if let Some(entry) = node.entries().first() {
                             if let Some(string) = entry.value().as_string() {
                                 output.adaptive_sync_availability =
-                                    AdaptiveSyncAvailability::try_from(string).ok();
+                                    AdaptiveSyncAvailabilityKdl::try_from(string)
+                                        .ok()
+                                        .map(AdaptiveSyncAvailability::from);
                             }
                         } else {
                             errors.push(KdlParseError::InvalidValue {
@@ -561,19 +669,17 @@ impl From<List> for KdlDocument {
             // adaptive_sync node
             if let Some(adaptive_sync) = output.adaptive_sync {
                 let mut node = kdl::KdlNode::new("adaptive_sync");
-                node.push(adaptive_sync.to_string());
+                node.push(AdaptiveSyncStateKdl::from(adaptive_sync).to_string());
                 children.nodes_mut().push(node);
             }
 
-            // FIXME true or false strings will cause KDL parse to fail
-            // adaptive_sync_support node
-            // if let Some(adaptive_sync_availability) = output.adaptive_sync_availability {
-            //     let mut node = kdl::KdlNode::new("adaptive_sync_support");
-            //     node.push(KdlEntry::new(KdlValue::String(
-            //         adaptive_sync_availability.to_string(),
-            //     )));
-            //     children.nodes_mut().push(node);
-            // }
+            if let Some(adaptive_sync_availability) = output.adaptive_sync_availability {
+                let mut node = kdl::KdlNode::new("adaptive_sync_support");
+                node.push(
+                    AdaptiveSyncAvailabilityKdl::from(adaptive_sync_availability).to_string(),
+                );
+                children.nodes_mut().push(node);
+            }
 
             // mirroring node
             if let Some(mirroring) = &output.mirroring {
@@ -696,11 +802,10 @@ mod test {
         assert_eq!(orig_output.scale, parsed_output.scale);
         assert_eq!(orig_output.transform, parsed_output.transform);
         assert_eq!(orig_output.adaptive_sync, parsed_output.adaptive_sync);
-        // FIXME
-        // assert_eq!(
-        //     orig_output.adaptive_sync_availability,
-        //     parsed_output.adaptive_sync_availability
-        // );
+        assert_eq!(
+            orig_output.adaptive_sync_availability,
+            parsed_output.adaptive_sync_availability
+        );
         assert_eq!(orig_output.xwayland_primary, parsed_output.xwayland_primary);
 
         // Compare modes by value (order should be preserved)
