@@ -7,7 +7,7 @@ use clap::{Parser, ValueEnum};
 use cosmic_randr::context::HeadConfiguration;
 use cosmic_randr::Message;
 use cosmic_randr::{AdaptiveSyncAvailability, AdaptiveSyncStateExt, Context};
-use cosmic_randr_shell::List;
+use cosmic_randr_shell::{KdlParseWithError, List};
 use nu_ansi_term::{Color, Style};
 use std::fmt::{Display, Write as FmtWrite};
 use std::io::Write;
@@ -263,7 +263,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .expect("Failed to read stdin");
             let doc = kdl::KdlDocument::parse(&input).expect("Invalid KDL");
 
-            let list: List = cosmic_randr_shell::List::try_from(doc).unwrap();
+            let list: List = match cosmic_randr_shell::List::try_from(doc) {
+                Ok(l) => l,
+                Err(KdlParseWithError { list, errors }) => {
+                    eprintln!("{errors:?}");
+                    list
+                }
+            };
             app.apply_list(list).await
         }
     }
