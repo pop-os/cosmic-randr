@@ -753,18 +753,18 @@ fn list_kdl(context: &Context) {
             if let Some(available) = head.adaptive_sync_support {
                 "  adaptive_sync_support \""
                 (match available {
-                    AdaptiveSyncAvailability::Supported => "true",
+                    AdaptiveSyncAvailability::Supported => "kdl_true",
                     AdaptiveSyncAvailability::RequiresModeset => "requires_modeset",
-                    _ => "false",
+                    _ => "kdl_false",
                 })
                 "\"\n"
             }
             if let Some(sync) = head.adaptive_sync {
                 "  adaptive_sync \""
                 (match sync {
-                    AdaptiveSyncStateExt::Always => "true",
+                    AdaptiveSyncStateExt::Always => "kdl_true",
                     AdaptiveSyncStateExt::Automatic => "automatic",
-                    _ => "false",
+                    _ => "kdl_false",
                 })
                 "\"\n"
             }
