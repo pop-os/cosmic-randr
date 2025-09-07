@@ -169,6 +169,22 @@ impl TryFrom<&str> for AdaptiveSyncState {
     }
 }
 
+impl From<AdaptiveSyncState> for &'static str {
+    fn from(this: AdaptiveSyncState) -> Self {
+        match this {
+            AdaptiveSyncState::Always => "true",
+            AdaptiveSyncState::Auto => "automatic",
+            AdaptiveSyncState::Disabled => "false",
+        }
+    }
+}
+
+impl Display for AdaptiveSyncState {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(<&'static str>::from(*self))
+    }
+}
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum AdaptiveSyncAvailability {
     Supported,
@@ -215,6 +231,22 @@ impl TryFrom<&str> for AdaptiveSyncAvailability {
             "requires_modeset" => AdaptiveSyncAvailability::RequiresModeset,
             _ => return Err("unknown adaptive_sync availability variant"),
         })
+    }
+}
+
+impl From<AdaptiveSyncAvailability> for &'static str {
+    fn from(this: AdaptiveSyncAvailability) -> Self {
+        match this {
+            AdaptiveSyncAvailability::Supported => "true",
+            AdaptiveSyncAvailability::RequiresModeset => "requires_modeset",
+            AdaptiveSyncAvailability::Unsupported => "false",
+        }
+    }
+}
+
+impl Display for AdaptiveSyncAvailability {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(<&'static str>::from(*self))
     }
 }
 
