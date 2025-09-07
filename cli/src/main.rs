@@ -751,22 +751,22 @@ fn list_kdl(context: &Context) {
                 }
             }
             if let Some(available) = head.adaptive_sync_support {
-                "  adaptive_sync_support \""
+                "  adaptive_sync_support "
                 (match available {
-                    AdaptiveSyncAvailability::Supported => "true",
-                    AdaptiveSyncAvailability::RequiresModeset => "requires_modeset",
-                    _ => "false",
+                    AdaptiveSyncAvailability::Supported => "#true",
+                    AdaptiveSyncAvailability::RequiresModeset => "\"requires_modeset\"",
+                    _ => "#false",
                 })
-                "\"\n"
+                "\n"
             }
             if let Some(sync) = head.adaptive_sync {
-                "  adaptive_sync \""
+                "  adaptive_sync "
                 (match sync {
-                    AdaptiveSyncStateExt::Always => "true",
-                    AdaptiveSyncStateExt::Automatic => "automatic",
-                    _ => "false",
+                    AdaptiveSyncStateExt::Always => "#true",
+                    AdaptiveSyncStateExt::Automatic => "\"automatic\"",
+                    _ => "#false",
                 })
-                "\"\n"
+                "\n"
             }
             if let Some(xwayland_primary) = head.xwayland_primary {
                 "  xwayland_primary "
