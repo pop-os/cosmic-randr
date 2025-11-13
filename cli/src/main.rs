@@ -27,9 +27,9 @@ struct Cli {
 struct Mode {
     /// Name of the output that the display is connected to.
     output: String,
-    /// Specifies the height of the output picture.
-    width: i32,
     /// Specifies the width of the output picture.
+    width: i32,
+    /// Specifies the height of the output picture.
     height: i32,
     /// Specifies the refresh rate to apply to the output.
     #[arg(long)]
