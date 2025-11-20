@@ -203,7 +203,7 @@ impl Configuration {
         let configured_heads = self.configured_heads.clone();
         for output in known_heads
             .iter()
-            .filter(|output| !configured_heads.iter().any(|name| *name == output.name))
+            .filter(|output| !configured_heads.contains(&output.name))
         {
             if output.enabled {
                 if let Some(from) = output.mirroring.as_ref() {
@@ -304,13 +304,11 @@ fn send_mode_to_config_head(
         } else {
             Err(ConfigurationError::ModeNotFound)
         }
+    } else if let Some(mode) = mode_iter().next() {
+        head_config.set_mode(&mode.wlr_mode);
+        Ok(())
     } else {
-        if let Some(mode) = mode_iter().next() {
-            head_config.set_mode(&mode.wlr_mode);
-            Ok(())
-        } else {
-            Err(ConfigurationError::ModeNotFound)
-        }
+        Err(ConfigurationError::ModeNotFound)
     }
 }
 
@@ -468,7 +466,7 @@ impl Context {
         let configured_heads = config_obj.configured_heads.clone();
         for output in known_heads
             .iter()
-            .filter(|output| !configured_heads.iter().any(|name| *name == output.name))
+            .filter(|output| !configured_heads.contains(&output.name))
         {
             let head_configuration = HeadConfiguration {
                 size: output.current_mode.as_ref().and_then(|mode_id| {

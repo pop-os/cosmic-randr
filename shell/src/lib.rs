@@ -20,6 +20,12 @@ pub struct Mode {
     pub preferred: bool,
 }
 
+impl Default for Mode {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Mode {
     #[must_use]
     pub const fn new() -> Self {
@@ -53,6 +59,12 @@ pub struct Output {
     pub adaptive_sync: Option<AdaptiveSyncState>,
     pub adaptive_sync_availability: Option<AdaptiveSyncAvailability>,
     pub xwayland_primary: Option<bool>,
+}
+
+impl Default for Output {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl Output {
@@ -343,10 +355,10 @@ impl TryFrom<KdlDocument> for List {
                     continue;
                 };
 
-                if entry_name.value() == "enabled" {
-                    if let Some(enabled) = entry.value().as_bool() {
-                        output.enabled = enabled;
-                    }
+                if entry_name.value() == "enabled"
+                    && let Some(enabled) = entry.value().as_bool()
+                {
+                    output.enabled = enabled;
                 }
             }
 
@@ -516,11 +528,11 @@ impl TryFrom<KdlDocument> for List {
                     "mirroring" => {
                         let mut applied = false;
 
-                        if let Some(entry) = node.entries().first() {
-                            if let Some(string) = entry.value().as_string() {
-                                applied = true;
-                                output.mirroring = Some(string.to_string());
-                            }
+                        if let Some(entry) = node.entries().first()
+                            && let Some(string) = entry.value().as_string()
+                        {
+                            applied = true;
+                            output.mirroring = Some(string.to_string());
                         }
                         if !applied {
                             errors.push(KdlParseError::InvalidValue {
@@ -532,11 +544,11 @@ impl TryFrom<KdlDocument> for List {
 
                     "xwayland_primary" => {
                         let mut applied = false;
-                        if let Some(entry) = node.entries().first() {
-                            if let Some(val) = entry.value().as_bool() {
-                                applied = true;
-                                output.xwayland_primary = Some(val);
-                            }
+                        if let Some(entry) = node.entries().first()
+                            && let Some(val) = entry.value().as_bool()
+                        {
+                            applied = true;
+                            output.xwayland_primary = Some(val);
                         }
                         if !applied {
                             errors.push(KdlParseError::InvalidValue {
