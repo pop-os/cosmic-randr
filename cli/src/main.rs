@@ -4,8 +4,8 @@
 pub mod align;
 
 use clap::{Parser, ValueEnum};
-use cosmic_randr::context::HeadConfiguration;
 use cosmic_randr::Message;
+use cosmic_randr::context::HeadConfiguration;
 use cosmic_randr::{AdaptiveSyncAvailability, AdaptiveSyncStateExt, Context};
 use cosmic_randr_shell::{KdlParseWithError, List};
 use nu_ansi_term::{Color, Style};

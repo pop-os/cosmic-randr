@@ -3,7 +3,7 @@
 
 use crate::{Context, Message};
 use cosmic_protocols::output_management::v1::client::zcosmic_output_manager_v1::ZcosmicOutputManagerV1;
-use wayland_client::{protocol::wl_registry, Connection, Dispatch, QueueHandle};
+use wayland_client::{Connection, Dispatch, QueueHandle, protocol::wl_registry};
 use wayland_protocols_wlr::output_management::v1::client::zwlr_output_manager_v1::ZwlrOutputManagerV1;
 
 impl Dispatch<wl_registry::WlRegistry, ()> for Context {
