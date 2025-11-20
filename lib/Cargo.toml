@@ -3,15 +3,15 @@ name = "cosmic-randr"
 version = "0.1.0"
 description = "high level library for wayland output configuration"
 license = "MPL-2.0"
-edition = "2021"
+edition = "2024"
 
 [dependencies]
-futures-lite = "2.6.0"
+futures-lite = "2.6.1"
 tachyonix = "0.3.1"
-thiserror = "2.0.11"
-tokio = { version = "1.43.0", features = ["net"] }
+thiserror = "2.0.17"
+tokio = { version = "1.48.0", features = ["net"] }
 tracing = "0.1.41"
-wayland-client = "0.31.8"
-wayland-protocols-wlr = { version = "0.3.6", features = [ "client", "wayland-client" ] }
+wayland-client = "0.31.11"
+wayland-protocols-wlr = { version = "0.3.9", features = [ "client", "wayland-client" ] }
 cosmic-protocols = { git = "https://github.com/pop-os/cosmic-protocols.git" }
-indexmap = "2.7.1"
+indexmap = "2.12.0"

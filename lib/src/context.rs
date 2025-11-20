@@ -17,7 +17,7 @@ use tachyonix::Sender;
 use wayland_client::protocol::{
     wl_callback::WlCallback, wl_output::Transform, wl_registry::WlRegistry,
 };
-use wayland_client::{backend::ObjectId, Connection, Proxy, QueueHandle};
+use wayland_client::{Connection, Proxy, QueueHandle, backend::ObjectId};
 use wayland_client::{DispatchError, EventQueue};
 use wayland_protocols_wlr::output_management::v1::client::zwlr_output_configuration_head_v1::ZwlrOutputConfigurationHeadV1;
 use wayland_protocols_wlr::output_management::v1::client::zwlr_output_configuration_v1::ZwlrOutputConfigurationV1;
@@ -276,7 +276,7 @@ fn send_mode_to_config_head(
                 AdaptiveSyncStateExt::Always => AdaptiveSyncState::Enabled,
                 AdaptiveSyncStateExt::Disabled => AdaptiveSyncState::Disabled,
                 AdaptiveSyncStateExt::Automatic => {
-                    return Err(ConfigurationError::UnsupportedVrrState)
+                    return Err(ConfigurationError::UnsupportedVrrState);
                 }
                 _ => panic!("Unknown AdaptiveSyncStatExt variant"),
             });

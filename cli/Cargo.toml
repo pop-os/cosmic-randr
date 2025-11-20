@@ -3,20 +3,19 @@ name = "cosmic-randr-cli"
 version = "0.1.0"
 description = "cosmic-randr command line interface"
 license = "MPL-2.0"
-edition = "2021"
+edition = "2024"
 
 [[bin]]
 name = "cosmic-randr"
 path = "src/main.rs"
 
 [dependencies]
-kdl = "6.3.4"
-clap = { version = "4.5.30", features = ["derive"] }
+kdl = "6.5.0"
+clap = { version = "4.5.53", features = ["derive"] }
 fomat-macros = "0.3.2"
-futures-lite = "2.6.0"
 cosmic-randr-shell = { path = "../shell" }
 cosmic-randr = { path = "../lib" }
 tachyonix = "0.3.1"
-tokio = { version = "1.43.0", features = ["macros", "rt", "io-std", "io-util"] }
-wayland-client = "0.31.8"
-nu-ansi-term = "0.50.1"
+tokio = { version = "1.48.0", features = ["macros", "rt", "io-std", "io-util"] }
+wayland-client = "0.31.11"
+nu-ansi-term = "0.50.3"
