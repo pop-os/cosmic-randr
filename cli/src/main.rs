@@ -408,7 +408,7 @@ impl App {
                 let mode = head.current_mode.as_ref()?;
                 let mode = head.modes.get(mode)?;
 
-                let (width, height) = if head.transform.map_or(true, |wl_transform| {
+                let (width, height) = if head.transform.is_none_or(|wl_transform| {
                     Transform::try_from(wl_transform).map_or(true, is_landscape)
                 }) {
                     (mode.width, mode.height)
@@ -439,7 +439,7 @@ impl App {
                     return None;
                 }
 
-                let (width, height) = if head.transform.map_or(true, |wl_transform| {
+                let (width, height) = if head.transform.is_none_or(|wl_transform| {
                     Transform::try_from(wl_transform).map_or(true, is_landscape)
                 }) {
                     (mode.width, mode.height)
