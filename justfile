@@ -1,21 +1,4 @@
 name := 'cosmic-randr'
-
-# Use mold linker if clang and mold exists.
-clang-path := `which clang || true`
-mold-path := `which mold || true`
-
-linker-arg := if clang-path != '' {
-    if mold-path != '' {
-        '-C linker=' + clang-path + ' -C link-arg=--ld-path=' + mold-path + ' '
-    } else {
-        ''
-    }
-} else {
-    ''
-}
-
-export RUSTFLAGS := linker-arg + env_var_or_default('RUSTFLAGS', '')
-
 rootdir := ''
 prefix := '/usr'
 

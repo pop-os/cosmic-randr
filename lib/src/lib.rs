@@ -1,6 +1,9 @@
 // Copyright 2023 System76 <info@system76.com>
 // SPDX-License-Identifier: MPL-2.0
 
+mod channel;
+pub use channel::{Receiver, Sender, channel};
+
 pub mod context;
 pub use context::Context;
 
@@ -17,7 +20,6 @@ pub use cosmic_protocols::output_management::v1::client::zcosmic_output_head_v1:
 };
 pub mod wl_registry;
 
-use tachyonix::Sender;
 use tokio::io::Interest;
 use wayland_client::backend::WaylandError;
 use wayland_client::{Connection, DispatchError, EventQueue};
@@ -27,7 +29,7 @@ use wayland_client::{Connection, DispatchError, EventQueue};
 /// # Errors
 ///
 /// Returns error if there are any wayland client connection errors.
-pub fn connect(sender: Sender<Message>) -> Result<(Context, EventQueue<Context>), Error> {
+pub fn connect(sender: Sender) -> Result<(Context, EventQueue<Context>), Error> {
     Context::connect(sender)
 }
 

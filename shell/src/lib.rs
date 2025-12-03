@@ -45,6 +45,7 @@ pub struct List {
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct Output {
+    pub serial_number: String,
     pub name: String,
     pub enabled: bool,
     pub mirroring: Option<String>,
@@ -71,6 +72,7 @@ impl Output {
     #[must_use]
     pub const fn new() -> Self {
         Self {
+            serial_number: String::new(),
             name: String::new(),
             enabled: false,
             mirroring: None,
@@ -370,6 +372,19 @@ impl TryFrom<KdlDocument> for List {
 
             for node in children.nodes() {
                 match node.name().value() {
+                    // Parse the serial number
+                    "serial_number" => {
+                        if let Some(entry) = node.entries().first() {
+                            output.serial_number =
+                                entry.value().as_string().unwrap_or("").to_owned();
+                        } else {
+                            errors.push(KdlParseError::InvalidValue {
+                                key: "serial_number".to_string(),
+                                value: node.entries().to_vec(),
+                            });
+                        }
+                    }
+
                     // Parse the make and model of the display output.
                     "description" => {
                         for entry in node.entries() {
@@ -584,7 +599,12 @@ impl From<List> for KdlDocument {
         for (_output_key, output) in value.outputs.iter() {
             let mut output_node = kdl::KdlNode::new("output");
 
-            // First entry: output name (unnamed)
+            // Serial number (if any)
+            if !output.serial_number.is_empty() {
+                output_node.push(output.serial_number.clone());
+            }
+
+            // Display adapter name (unnamed)
             output_node.push(output.name.clone());
 
             // Additional entries: enabled (named)
@@ -721,6 +741,7 @@ mod test {
         let mode2_key = list.modes.insert(mode2);
 
         let output = Output {
+            serial_number: String::new(),
             name: "HDMI-A-1".to_string(),
             enabled: true,
             mirroring: Some("eDP-1".to_string()),
@@ -759,6 +780,7 @@ mod test {
         let orig_output = list.outputs.values().next().unwrap();
         let parsed_output = parsed_list.outputs.values().next().unwrap();
 
+        assert_eq!(orig_output.serial_number, parsed_output.serial_number);
         assert_eq!(orig_output.name, parsed_output.name);
         assert_eq!(orig_output.enabled, parsed_output.enabled);
         assert_eq!(orig_output.mirroring, parsed_output.mirroring);

@@ -11,7 +11,6 @@ use cosmic_randr_shell::{KdlParseWithError, List};
 use nu_ansi_term::{Color, Style};
 use std::fmt::{Display, Write as FmtWrite};
 use std::io::Write;
-use tachyonix::Receiver;
 use wayland_client::protocol::wl_output::Transform as WlTransform;
 use wayland_client::{EventQueue, Proxy};
 
@@ -229,7 +228,7 @@ impl AdaptiveSync {
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let cli = Cli::parse();
 
-    let (message_tx, message_rx) = tachyonix::channel(5);
+    let (message_tx, message_rx) = cosmic_randr::channel();
 
     let (context, event_queue) = cosmic_randr::connect(message_tx)?;
 
@@ -278,7 +277,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 struct App {
     context: Context,
     event_queue: EventQueue<Context>,
-    message_rx: Receiver<Message>,
+    message_rx: cosmic_randr::Receiver,
 }
 
 impl App {
@@ -286,7 +285,7 @@ impl App {
     async fn dispatch_until_manager_done(&mut self) -> Result<(), cosmic_randr::Error> {
         loop {
             let watcher = async {
-                while let Ok(msg) = self.message_rx.recv().await {
+                while let Some(msg) = self.message_rx.recv().await {
                     if matches!(msg, Message::ManagerDone) {
                         return true;
                     }
@@ -316,8 +315,8 @@ impl App {
     /// Returns error if the message receiver fails, dispach fails, or a configuration failed.
     async fn receive_config_messages(&mut self) -> Result<(), Box<dyn std::error::Error>> {
         loop {
-            while let Ok(message) = self.message_rx.try_recv() {
-                if config_message(Ok(message))? {
+            while let Some(message) = self.message_rx.try_recv().await {
+                if config_message(Some(message))? {
                     return Ok(());
                 }
             }
@@ -588,17 +587,16 @@ impl App {
 /// - Error if the output configuration returned an error.
 /// - Or if the channel is disconnected.
 pub fn config_message(
-    message: Result<cosmic_randr::Message, tachyonix::RecvError>,
+    message: Option<cosmic_randr::Message>,
 ) -> Result<bool, Box<dyn std::error::Error>> {
     match message {
-        Ok(cosmic_randr::Message::ConfigurationCancelled) => Err("configuration cancelled".into()),
+        Some(cosmic_randr::Message::ConfigurationCancelled) => {
+            Err("configuration cancelled".into())
+        }
 
-        Ok(cosmic_randr::Message::ConfigurationFailed) => Err("configuration failed".into()),
+        Some(cosmic_randr::Message::ConfigurationFailed) => Err("configuration failed".into()),
 
-        Ok(cosmic_randr::Message::ConfigurationSucceeded) => Ok(true),
-
-        Err(why) => Err(format!("channel error: {why:?}").into()),
-
+        Some(cosmic_randr::Message::ConfigurationSucceeded) => Ok(true),
         _ => Ok(false),
     }
 }

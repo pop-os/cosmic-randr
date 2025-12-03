@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MPL-2.0
 
 use crate::output_head::OutputHead;
-use crate::{Error, Message};
+use crate::{Error, Message, Sender};
 use cosmic_protocols::output_management::v1::client::zcosmic_output_configuration_head_v1::{
     self, ZcosmicOutputConfigurationHeadV1,
 };
@@ -13,7 +13,6 @@ use cosmic_protocols::output_management::v1::client::zcosmic_output_manager_v1::
 };
 use std::collections::HashMap;
 use std::fmt;
-use tachyonix::Sender;
 use wayland_client::protocol::{
     wl_callback::WlCallback, wl_output::Transform, wl_registry::WlRegistry,
 };
@@ -26,11 +25,10 @@ use wayland_protocols_wlr::output_management::v1::client::zwlr_output_head_v1::{
 };
 use wayland_protocols_wlr::output_management::v1::client::zwlr_output_manager_v1::ZwlrOutputManagerV1;
 
-#[derive(Debug)]
 pub struct Context {
     pub connection: Connection,
     pub handle: QueueHandle<Context>,
-    sender: Sender<Message>,
+    sender: Sender,
 
     pub output_manager: Option<ZwlrOutputManagerV1>,
     pub cosmic_output_manager: Option<ZcosmicOutputManagerV1>,
@@ -326,7 +324,7 @@ impl Context {
             .map_err(Error::from)
     }
 
-    pub async fn send(&mut self, event: Message) -> Result<(), tachyonix::SendError<Message>> {
+    pub async fn send(&mut self, event: Message) {
         self.sender.send(event).await
     }
 
@@ -378,7 +376,7 @@ impl Context {
         Ok(())
     }
 
-    pub fn connect(sender: Sender<Message>) -> Result<(Self, EventQueue<Self>), Error> {
+    pub fn connect(sender: Sender) -> Result<(Self, EventQueue<Self>), Error> {
         let connection = Connection::connect_to_env()?;
 
         let mut event_queue = connection.new_event_queue();
