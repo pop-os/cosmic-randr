@@ -32,7 +32,7 @@ struct Channel {
 pub struct Sender(Arc<Channel>);
 
 impl Sender {
-    pub async fn send(&self, message: Message) {
+    pub fn send(&self, message: Message) {
         self.0.queue.lock().unwrap().push_back(message);
         self.0.notify.notify_one();
     }
@@ -49,7 +49,7 @@ pub struct Receiver(Arc<Channel>);
 
 impl Receiver {
     /// Returns a value until the sender is dropped.
-    pub async fn recv(&mut self) -> Option<Message> {
+    pub async fn recv(&self) -> Option<Message> {
         loop {
             if let Some(value) = self.0.queue.lock().unwrap().pop_front() {
                 return Some(value);
@@ -63,7 +63,7 @@ impl Receiver {
         }
     }
 
-    pub fn try_recv(&mut self) -> Option<Message> {
+    pub fn try_recv(&self) -> Option<Message> {
         self.0.queue.lock().unwrap().pop_front()
     }
 }

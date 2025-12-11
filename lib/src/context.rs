@@ -324,8 +324,8 @@ impl Context {
             .map_err(Error::from)
     }
 
-    pub async fn send(&mut self, event: Message) {
-        self.sender.send(event).await
+    pub fn send(&mut self, event: Message) {
+        self.sender.send(event)
     }
 
     pub fn create_output_config(&mut self) -> Configuration {

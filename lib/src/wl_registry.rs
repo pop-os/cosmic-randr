@@ -27,9 +27,7 @@ impl Dispatch<wl_registry::WlRegistry, ()> for Context {
                         "wlr-output-management protocol version {version} < 2 is not supported"
                     );
 
-                    futures_lite::future::block_on(async {
-                        let _ = state.send(Message::Unsupported).await;
-                    });
+                    let _ = state.send(Message::Unsupported);
 
                     return;
                 }

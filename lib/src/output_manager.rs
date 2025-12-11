@@ -47,18 +47,14 @@ impl Dispatch<ZwlrOutputManagerV1, ()> for Context {
                     // `get_head`. Queue sending `ManagerDone` until sync callback.
                     state.done_queued = true;
                 } else {
-                    futures_lite::future::block_on(async {
-                        let _res = state.send(Message::ManagerDone).await;
-                    });
+                    let _res = state.send(Message::ManagerDone);
                 }
             }
 
             ZwlrOutputManagerEvent::Finished => {
                 state.output_manager = None;
                 state.output_manager_serial = 0;
-                futures_lite::future::block_on(async {
-                    let _res = state.send(Message::ManagerFinished).await;
-                });
+                let _res = state.send(Message::ManagerFinished);
             }
 
             _ => tracing::debug!(?event, "unknown event"),
@@ -98,9 +94,7 @@ impl Dispatch<WlCallback, ()> for Context {
                 if state.cosmic_manager_sync_callback.as_ref() == Some(proxy) {
                     state.cosmic_manager_sync_callback = None;
                     if state.done_queued {
-                        futures_lite::future::block_on(async {
-                            let _res = state.send(Message::ManagerDone).await;
-                        });
+                        let _res = state.send(Message::ManagerDone);
                         state.done_queued = false;
                     }
                 }
