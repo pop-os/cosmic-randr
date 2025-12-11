@@ -315,7 +315,7 @@ impl App {
     /// Returns error if the message receiver fails, dispach fails, or a configuration failed.
     async fn receive_config_messages(&mut self) -> Result<(), Box<dyn std::error::Error>> {
         loop {
-            while let Some(message) = self.message_rx.try_recv().await {
+            while let Some(message) = self.message_rx.try_recv() {
                 if config_message(Some(message))? {
                     return Ok(());
                 }
