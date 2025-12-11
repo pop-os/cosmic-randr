@@ -16,23 +16,21 @@ impl Dispatch<ZwlrOutputConfigurationV1, ()> for Context {
         _conn: &Connection,
         _handle: &QueueHandle<Self>,
     ) {
-        futures_lite::future::block_on(async {
-            match event {
-                Event::Succeeded => {
-                    let _res = state.send(Message::ConfigurationSucceeded).await;
-                    proxy.destroy();
-                }
-                Event::Failed => {
-                    let _res = state.send(Message::ConfigurationFailed).await;
-                    proxy.destroy();
-                }
-                Event::Cancelled => {
-                    let _res = state.send(Message::ConfigurationCancelled).await;
-                    proxy.destroy();
-                }
-                _ => unreachable!(),
+        match event {
+            Event::Succeeded => {
+                let _res = state.send(Message::ConfigurationSucceeded);
+                proxy.destroy();
             }
-        });
+            Event::Failed => {
+                let _res = state.send(Message::ConfigurationFailed);
+                proxy.destroy();
+            }
+            Event::Cancelled => {
+                let _res = state.send(Message::ConfigurationCancelled);
+                proxy.destroy();
+            }
+            _ => unreachable!(),
+        }
     }
 }
 
