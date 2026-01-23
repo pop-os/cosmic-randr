@@ -599,11 +599,6 @@ impl From<List> for KdlDocument {
         for (_output_key, output) in value.outputs.iter() {
             let mut output_node = kdl::KdlNode::new("output");
 
-            // Serial number (if any)
-            if !output.serial_number.is_empty() {
-                output_node.push(output.serial_number.clone());
-            }
-
             // Display adapter name (unnamed)
             output_node.push(output.name.clone());
 
@@ -612,6 +607,14 @@ impl From<List> for KdlDocument {
 
             // Children: description, physical, position, scale, transform, adaptive_sync, adaptive_sync_support, mirroring, xwayland_primary, modes
             let mut children = KdlDocument::new();
+
+            // serial_number node
+            let serial_number = output.serial_number.trim();
+            if !serial_number.is_empty() {
+                let mut node = kdl::KdlNode::new("serial_number");
+                node.push(serial_number.to_string());
+                children.nodes_mut().push(node);
+            }
 
             // description node
             if output.make.is_some() || !output.model.is_empty() {
@@ -741,7 +744,7 @@ mod test {
         let mode2_key = list.modes.insert(mode2);
 
         let output = Output {
-            serial_number: String::new(),
+            serial_number: "ABC123".to_string(),
             name: "HDMI-A-1".to_string(),
             enabled: true,
             mirroring: Some("eDP-1".to_string()),

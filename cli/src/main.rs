@@ -518,59 +518,80 @@ impl App {
         let mut current_heads: Vec<_> = self.context.output_heads.values_mut().collect();
 
         for (_, head) in list.outputs.drain() {
-            for current in &mut current_heads {
-                if current.name == head.name
-                    && current.make == head.clone().make.unwrap_or_default()
-                    && current.model == head.model
-                {
-                    current.adaptive_sync = head.adaptive_sync.map(|sync| match sync {
-                        cosmic_randr_shell::AdaptiveSyncState::Always => {
-                            AdaptiveSyncStateExt::Always
-                        }
-                        cosmic_randr_shell::AdaptiveSyncState::Auto => {
-                            AdaptiveSyncStateExt::Automatic
-                        }
-                        cosmic_randr_shell::AdaptiveSyncState::Disabled => {
-                            AdaptiveSyncStateExt::Disabled
-                        }
-                    });
-                    current.enabled = head.enabled;
-                    current.position_x = head.position.0;
-                    current.position_y = head.position.1;
-                    current.scale = head.scale;
-                    current.transform = head.transform.map(|t| match t {
-                        cosmic_randr_shell::Transform::Normal => WlTransform::Normal,
-                        cosmic_randr_shell::Transform::Rotate90 => WlTransform::_90,
-                        cosmic_randr_shell::Transform::Rotate180 => WlTransform::_180,
-                        cosmic_randr_shell::Transform::Rotate270 => WlTransform::_270,
-                        cosmic_randr_shell::Transform::Flipped => WlTransform::Flipped,
-                        cosmic_randr_shell::Transform::Flipped90 => WlTransform::Flipped90,
-                        cosmic_randr_shell::Transform::Flipped180 => WlTransform::Flipped180,
-                        cosmic_randr_shell::Transform::Flipped270 => WlTransform::Flipped270,
-                    });
-                    current.mirroring = head.mirroring.clone();
-                    current.xwayland_primary = head.xwayland_primary;
-                    if let Some(cur_mode_id) = head
-                        .current
-                        .and_then(|k| list.modes.get(k))
-                        .and_then(|mode_info| {
-                            current.modes.iter_mut().find_map(|(id, mode)| {
-                                if mode.width == mode_info.size.0 as i32
-                                    && mode.height == mode_info.size.1 as i32
-                                {
-                                    mode.refresh = mode_info.refresh_rate as i32;
-                                    mode.preferred = mode_info.preferred;
-                                    Some(id.clone())
-                                } else {
-                                    None
-                                }
-                            })
-                        })
-                    {
-                        current.current_mode = Some(cur_mode_id);
-                    }
+            let desired_serial = head.serial_number.trim();
+            let desired_make = head.make.clone().unwrap_or_default();
+            let desired_model = head.model.clone();
 
-                    break;
+            let mut matched_index = None;
+            if !desired_serial.is_empty() {
+                for (i, current) in current_heads.iter().enumerate() {
+                    let current_serial = current.serial_number.trim();
+                    if !current_serial.is_empty()
+                        && current_serial == desired_serial
+                        && current.make == desired_make
+                        && current.model == desired_model
+                    {
+                        matched_index = Some(i);
+                        break;
+                    }
+                }
+            }
+
+            if matched_index.is_none() {
+                for (i, current) in current_heads.iter().enumerate() {
+                    if current.name == head.name
+                        && current.make == head.make.clone().unwrap_or_default()
+                        && current.model == head.model
+                    {
+                        matched_index = Some(i);
+                        break;
+                    }
+                }
+            }
+
+            if let Some(i) = matched_index {
+                let current = &mut *current_heads[i];
+                current.adaptive_sync = head.adaptive_sync.map(|sync| match sync {
+                    cosmic_randr_shell::AdaptiveSyncState::Always => AdaptiveSyncStateExt::Always,
+                    cosmic_randr_shell::AdaptiveSyncState::Auto => AdaptiveSyncStateExt::Automatic,
+                    cosmic_randr_shell::AdaptiveSyncState::Disabled => {
+                        AdaptiveSyncStateExt::Disabled
+                    }
+                });
+                current.enabled = head.enabled;
+                current.position_x = head.position.0;
+                current.position_y = head.position.1;
+                current.scale = head.scale;
+                current.transform = head.transform.map(|t| match t {
+                    cosmic_randr_shell::Transform::Normal => WlTransform::Normal,
+                    cosmic_randr_shell::Transform::Rotate90 => WlTransform::_90,
+                    cosmic_randr_shell::Transform::Rotate180 => WlTransform::_180,
+                    cosmic_randr_shell::Transform::Rotate270 => WlTransform::_270,
+                    cosmic_randr_shell::Transform::Flipped => WlTransform::Flipped,
+                    cosmic_randr_shell::Transform::Flipped90 => WlTransform::Flipped90,
+                    cosmic_randr_shell::Transform::Flipped180 => WlTransform::Flipped180,
+                    cosmic_randr_shell::Transform::Flipped270 => WlTransform::Flipped270,
+                });
+                current.mirroring = head.mirroring.clone();
+                current.xwayland_primary = head.xwayland_primary;
+                if let Some(cur_mode_id) = head
+                    .current
+                    .and_then(|k| list.modes.get(k))
+                    .and_then(|mode_info| {
+                        current.modes.iter_mut().find_map(|(id, mode)| {
+                            if mode.width == mode_info.size.0 as i32
+                                && mode.height == mode_info.size.1 as i32
+                            {
+                                mode.refresh = mode_info.refresh_rate as i32;
+                                mode.preferred = mode_info.preferred;
+                                Some(id.clone())
+                            } else {
+                                None
+                            }
+                        })
+                    })
+                {
+                    current.current_mode = Some(cur_mode_id);
                 }
             }
         }
@@ -652,6 +673,9 @@ fn list(context: &Context) {
             }
             (Color::Yellow.bold().paint("\n  Model: "))
             (head.model)
+            if !head.serial_number.trim().is_empty() {
+                (Color::Yellow.bold().paint("\n  Serial: ")) (head.serial_number)
+            }
             (Color::Yellow.bold().paint("\n  Physical Size: "))
             (head.physical_width) " x " (head.physical_height) " mm"
             (Color::Yellow.bold().paint("\n  Position: "))
@@ -775,7 +799,7 @@ fn list_kdl(context: &Context) {
                 })
                 "\n"
             }
-            if !head.serial_number.is_empty() {
+            if !head.serial_number.trim().is_empty() {
                 "  serial_number \"" (head.serial_number) "\"\n"
             }
             "  modes {"
