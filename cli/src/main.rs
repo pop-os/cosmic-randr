@@ -518,18 +518,19 @@ impl App {
         let mut current_heads: Vec<_> = self.context.output_heads.values_mut().collect();
 
         for (_, head) in list.outputs.drain() {
-            let desired_serial = head.serial_number.trim();
-            let desired_make = head.make.clone().unwrap_or_default();
-            let desired_model = head.model.clone();
-
+            let head_serial = head.serial_number.trim();
+            let head_make = head.make.clone().unwrap_or_default();
+            let head_model = head.model.clone();
             let mut matched_index = None;
-            if !desired_serial.is_empty() {
+
+            // First try to match by serial number
+            if !head_serial.is_empty() {
                 for (i, current) in current_heads.iter().enumerate() {
                     let current_serial = current.serial_number.trim();
                     if !current_serial.is_empty()
-                        && current_serial == desired_serial
-                        && current.make == desired_make
-                        && current.model == desired_model
+                        && current_serial == head_serial
+                        && current.make == head_make
+                        && current.model == head_model
                     {
                         matched_index = Some(i);
                         break;
@@ -537,11 +538,12 @@ impl App {
                 }
             }
 
+            // Next try to match by name, make, and model
             if matched_index.is_none() {
                 for (i, current) in current_heads.iter().enumerate() {
                     if current.name == head.name
-                        && current.make == head.make.clone().unwrap_or_default()
-                        && current.model == head.model
+                        && current.make == head_make
+                        && current.model == head_model
                     {
                         matched_index = Some(i);
                         break;
