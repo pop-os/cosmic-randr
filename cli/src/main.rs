@@ -730,6 +730,11 @@ fn list_kdl(context: &Context) {
     let mut output = String::new();
 
     for head in context.output_heads.values() {
+        let serial_number = head
+            .serial_number
+            .replace("\\", "\\\\")
+            .replace("\"", "\\\"");
+
         #[allow(clippy::ignored_unit_patterns)]
         let _res = fomat_macros::witeln!(
             &mut output,
@@ -775,8 +780,8 @@ fn list_kdl(context: &Context) {
                 })
                 "\n"
             }
-            if !head.serial_number.is_empty() {
-                "  serial_number \"" (head.serial_number) "\"\n"
+            if !serial_number.is_empty() {
+                "  serial_number \"" (serial_number) "\"\n"
             }
             "  modes {"
         );
