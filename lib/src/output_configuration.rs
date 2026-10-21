@@ -18,15 +18,15 @@ impl Dispatch<ZwlrOutputConfigurationV1, ()> for Context {
     ) {
         match event {
             Event::Succeeded => {
-                let _res = state.send(Message::ConfigurationSucceeded);
+                state.send(Message::ConfigurationSucceeded);
                 proxy.destroy();
             }
             Event::Failed => {
-                let _res = state.send(Message::ConfigurationFailed);
+                state.send(Message::ConfigurationFailed);
                 proxy.destroy();
             }
             Event::Cancelled => {
-                let _res = state.send(Message::ConfigurationCancelled);
+                state.send(Message::ConfigurationCancelled);
                 proxy.destroy();
             }
             _ => unreachable!(),
