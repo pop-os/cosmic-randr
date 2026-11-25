@@ -4,7 +4,7 @@
 
 #[tokio::main(flavor = "current_thread")]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let (tx, mut rx) = cosmic_randr::channel();
+    let (tx, rx) = cosmic_randr::channel();
 
     tokio::spawn(async move {
         let Ok((mut context, mut event_queue)) = cosmic_randr::connect(tx) else {

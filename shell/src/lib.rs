@@ -767,11 +767,10 @@ mod test {
         // Parse back from KDL
         let parsed_doc: KdlDocument = kdl_string.parse().expect("KDL parse failed");
         let parsed_list = List::try_from(parsed_doc)
-            .map_err(|e| {
+            .inspect_err(|e| {
                 for err in &e.errors {
                     eprintln!("{:?}", err);
                 }
-                e
             })
             .expect("KDL deserialization failed");
 
